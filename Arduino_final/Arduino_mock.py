@@ -96,10 +96,10 @@ class EMGSystem:
             try:
                 time.sleep(HEARTBEAT_INTERVAL)
                 if self.client_socket:
-                    self.client_socket.sendall(b"HEART BEAT\n")
-                    print("Odesláno: HEART BEAT")
+                    self.client_socket.sendall(b"ALIVE\n")
+                    print("Odesláno: ALIVE")
             except Exception as e:
-                print("Chyba při odesílání HEART BEAT:", e)
+                print("Chyba při odesílání ALIVE:", e)
                 break
 
     def read_input_loop(self):
