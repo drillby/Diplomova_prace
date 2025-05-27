@@ -7,13 +7,13 @@ import time
 TCP_PORT = 8888
 REFRESH_RATE_HZ = 1  # 1Hz pro snadné testování
 REFRESH_INTERVAL = 1.0 / REFRESH_RATE_HZ
+HEARTBEAT_INTERVAL = 1.5
 MAX_SENSORS = 4
 
 
 # --- Simulace EMG senzoru ---
 class EMGSensorMock:
     def read_voltage(self, reference_voltage=5.0, resolution=1023):
-        # Náhodně generovaná hodnota mezi 0 a 5V
         return random.uniform(0, reference_voltage)
 
 
@@ -27,6 +27,8 @@ class EMGSystem:
         self.sensors = []
         self.last_sent_value = -1
         self.initialized = False
+        self.heartbeat_thread = None
+        self.heartbeat_running = False
 
     def start_server(self):
         self.server_socket.bind(("", self.port))
@@ -53,6 +55,12 @@ class EMGSystem:
                 self.init_sensors(count)
                 self.initialized = True
                 self.client_socket.settimeout(None)
+
+                # Spuštění HEARTBEAT vlákna
+                self.heartbeat_running = True
+                self.heartbeat_thread = threading.Thread(target=self.send_heartbeat, daemon=True)
+                self.heartbeat_thread.start()
+
                 self.send_loop()
             else:
                 print("Neplatný počet senzorů.")
@@ -99,7 +107,19 @@ class EMGSystem:
         finally:
             self.cleanup_client()
 
+    def send_heartbeat(self):
+        while self.heartbeat_running and self.client_socket:
+            try:
+                time.sleep(HEARTBEAT_INTERVAL)
+                if self.client_socket:
+                    self.client_socket.sendall(b"HEART BEAT\n")
+                    print("Odesláno: HEART BEAT")
+            except Exception as e:
+                print("Chyba při odesílání HEART BEAT:", e)
+                break
+
     def cleanup_client(self):
+        self.heartbeat_running = False
         if self.client_socket:
             self.client_socket.close()
         self.client_socket = None
