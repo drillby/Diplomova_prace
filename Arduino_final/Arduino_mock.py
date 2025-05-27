@@ -1,34 +1,26 @@
-import random
 import socket
 import threading
 import time
 
 # --- Konstanty ---
 TCP_PORT = 8888
-REFRESH_RATE_HZ = 1  # 1Hz pro snadné testování
+REFRESH_RATE_HZ = 1
 REFRESH_INTERVAL = 1.0 / REFRESH_RATE_HZ
 HEARTBEAT_INTERVAL = 1.5
 MAX_SENSORS = 4
 
 
-# --- Simulace EMG senzoru ---
-class EMGSensorMock:
-    def read_voltage(self, reference_voltage=5.0, resolution=1023):
-        return random.uniform(0, reference_voltage)
-
-
-# --- TCP Server pro EMG ---
 class EMGSystem:
     def __init__(self, port):
         self.port = port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket = None
         self.client_address = None
-        self.sensors = []
+        self.num_sensors = 0
         self.last_sent_value = -1
         self.initialized = False
-        self.heartbeat_thread = None
         self.heartbeat_running = False
+        self.manual_value = None  # Hodnota zadaná uživatelem
 
     def start_server(self):
         self.server_socket.bind(("", self.port))
@@ -52,14 +44,13 @@ class EMGSystem:
             count = int(input_data)
 
             if 1 <= count <= MAX_SENSORS:
-                self.init_sensors(count)
+                self.num_sensors = count
                 self.initialized = True
                 self.client_socket.settimeout(None)
 
-                # Spuštění HEARTBEAT vlákna
                 self.heartbeat_running = True
-                self.heartbeat_thread = threading.Thread(target=self.send_heartbeat, daemon=True)
-                self.heartbeat_thread.start()
+                threading.Thread(target=self.send_heartbeat, daemon=True).start()
+                threading.Thread(target=self.read_input_loop, daemon=True).start()
 
                 self.send_loop()
             else:
@@ -69,10 +60,6 @@ class EMGSystem:
         except (ValueError, socket.timeout) as e:
             print("Chyba během čtení od klienta:", e)
             self.client_socket.close()
-
-    def init_sensors(self, count):
-        self.sensors = [EMGSensorMock() for _ in range(count)]
-        print(f"Inicializováno {count} EMG senzor(ů).")
 
     def send_loop(self):
         try:
@@ -88,15 +75,12 @@ class EMGSystem:
                     pass
                 self.client_socket.setblocking(True)
 
-                sensor_data = [1 if s.read_voltage() > 1.6 else 0 for s in self.sensors]
-                decimal_value = sum(
-                    val << (len(sensor_data) - 1 - i)
-                    for i, val in enumerate(sensor_data)
-                )
-
-                if decimal_value != self.last_sent_value:
-                    self.last_sent_value = decimal_value
-                    msg = f"{decimal_value}\n"
+                if (
+                    self.manual_value is not None
+                    and self.manual_value != self.last_sent_value
+                ):
+                    self.last_sent_value = self.manual_value
+                    msg = f"{self.manual_value}\n"
                     self.client_socket.sendall(msg.encode())
                     print(f"Odesláno: {msg.strip()}")
 
@@ -118,18 +102,33 @@ class EMGSystem:
                 print("Chyba při odesílání HEART BEAT:", e)
                 break
 
+    def read_input_loop(self):
+        max_val = 2**self.num_sensors - 1
+        print(f"Zadej číslo v rozsahu 0 až {max_val} pro odeslání:")
+        while self.initialized:
+            try:
+                user_input = input("> ").strip()
+                if not user_input:
+                    continue
+                value = int(user_input)
+                if 0 <= value <= max_val:
+                    self.manual_value = value
+                else:
+                    print(f"Neplatná hodnota, zadej číslo mezi 0 a {max_val}")
+            except ValueError:
+                print("Zadej platné celé číslo.")
+
     def cleanup_client(self):
         self.heartbeat_running = False
         if self.client_socket:
             self.client_socket.close()
         self.client_socket = None
-        self.sensors = []
         self.initialized = False
         self.last_sent_value = -1
+        self.manual_value = None
         print("Klient odpojen a systém resetován.")
 
 
-# --- Spuštění serveru ---
 if __name__ == "__main__":
     emg = EMGSystem(TCP_PORT)
     emg.start_server()
