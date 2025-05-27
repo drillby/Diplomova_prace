@@ -50,6 +50,7 @@ private:
     WiFiClient client;
     bool initialized = false;
     long lastTimeSent = 0;
+    long lastAliveTime = 0;
     int lastSentValue = -1;
 
     /// @brief Handles a new client connection and initializes sensors based on client input.
@@ -129,7 +130,7 @@ private:
                 char c = client.read();
                 inputBuffer[index++] = c;
             }
-            inputBuffer[index] = '\0'; // ukonči string
+            inputBuffer[index] = '\0';
 
             if (strstr(inputBuffer, "DISCONNECT") != nullptr)
             {
@@ -145,7 +146,7 @@ private:
         {
             sensorData[i] = sensors[i]->readVoltage() > 1.6 ? 1 : 0;
         }
-        // convert from binary to decimal
+
         int decimalValue = 0;
         for (int i = 0; i < sensorCount; i++)
         {
@@ -156,7 +157,6 @@ private:
         if (decimalValue != lastSentValue)
         {
             lastSentValue = decimalValue;
-
             char msg[20];
             snprintf(msg, sizeof(msg), "%d\n", decimalValue);
             client.print(msg);
@@ -173,9 +173,16 @@ private:
         {
             debugPrint("Data odeslána klientovi.");
         }
+
+        // ALIVE každých 1.5 s
+        if (millis() - lastAliveTime >= 1500)
+        {
+            client.print("ALIVE\n");
+            debugPrint("Odesláno: ALIVE");
+            lastAliveTime = millis();
+        }
     }
 
-    /// @brief Cleans up all sensors and resets the system state.
     void cleanupSensors()
     {
         for (int i = 0; i < maxSensors; i++)
@@ -191,7 +198,6 @@ private:
         debugPrint("Senzory byly vyčištěny.");
     }
 
-    /// @brief Cleans up client connection and resets the system state.
     void cleanupClient()
     {
         client.stop();
@@ -200,10 +206,9 @@ private:
         debugPrint("Klient odpojen a systém resetován.");
     }
 
-    /// @brief Inicializuje senzory podle přijatého počtu.
     void initSensors(int count)
     {
-        cleanupSensors(); // Ensure no leftover sensors from previous initialization
+        cleanupSensors();
 
         if (count < 1 || count > maxSensors)
         {
@@ -221,6 +226,7 @@ private:
         snprintf(msg, sizeof(msg), "Inicializováno %d EMG senzor(ů).", sensorCount);
         debugPrint(msg);
         initialized = true;
+        lastAliveTime = millis(); // reset ALIVE timer při nové inicializaci
     }
 
 public:
