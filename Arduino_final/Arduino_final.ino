@@ -2,23 +2,24 @@
 #include <WiFiNINA.h>
 
 // --- Konstanty ---
-const char ssid[] = "Zizice_doma";            /// @brief SSID WiFi sítě
-const char pass[] = "Pavel_Olinka";           /// @brief Heslo k WiFi síti
-const int tcpPort = 8888;                     /// @brief TCP port pro server
-const int refreshRateHz = 100;                /// @brief Frekvence aktualizace v Hz
-const int refreshRate = 1000 / refreshRateHz; /// @brief Doba mezi aktualizacemi v ms
-const int debugPin = 7;                       /// @brief Pin pro aktivaci debug výpisu
-
+const char ssid[] = "Zizice_doma";                /// @brief SSID WiFi sítě
+const char pass[] = "Pavel_Olinka";               /// @brief Heslo k WiFi síti
+const int tcpPort = 8888;                         /// @brief TCP port pro server
+const int refreshRateHz = 100;                    /// @brief Frekvence aktualizace v Hz
+const int refreshRate = 1000 / refreshRateHz;     /// @brief Doba mezi aktualizacemi v ms
+const int debugPin = 7;                           /// @brief Pin pro aktivaci debug výpisu
+const int serialPrintPin = 6;                     /// @brief Pin pro výpis zasílaných zpráv přes Serial
+const int serialBaudRate = 9600;                  /// @brief Baud rate pro Serial komunikaci
 const int maxSensors = 4;                         /// @brief Maximální počet podporovaných EMG senzorů
 const int emgPins[maxSensors] = {A0, A1, A2, A3}; /// @brief Analogové piny pro senzory
+const uint16_t aliveIntervalMs = 1500;            /// @brief Interval mezi ALIVE zprávami v ms
 
-const uint16_t aliveIntervalMs = 1500; /// @brief Interval mezi ALIVE zprávami v ms
-
-/// @brief Vypíše debug zprávu do Serial monitoru, pokud je debugPin v LOW.
+/// @brief Vypíše debug zprávu do Serial monitoru, pokud je pin v LOW.
 /// @param message Zpráva k vypsání
-void debugPrint(const char *message)
+/// @param pin Pin, který aktivuje debug výpis (LOW = aktivní)
+void printIfPinLow(const char *message, int pin)
 {
-    if (digitalRead(debugPin) == LOW)
+    if (digitalRead(pin) == LOW)
     {
         Serial.println(message);
     }
@@ -98,22 +99,22 @@ public:
 
         threshold = mean + 1.5 * stdDev;
 
-        debugPrint("Kalibrace:");
+        printIfPinLow("Kalibrace:", debugPin);
 
         char buf[50];
         char floatStr[20];
 
         dtostrf(mean, 7, 4, floatStr); // šířka 7 znaků, 4 desetinná místa
         snprintf(buf, sizeof(buf), "Průměr: %s", floatStr);
-        debugPrint(buf);
+        printIfPinLow(buf, debugPin);
 
         dtostrf(stdDev, 7, 4, floatStr);
         snprintf(buf, sizeof(buf), "Směrodatná odchylka: %s", floatStr);
-        debugPrint(buf);
+        printIfPinLow(buf, debugPin);
 
         dtostrf(threshold, 7, 4, floatStr);
         snprintf(buf, sizeof(buf), "Nastaven prah: %s", floatStr);
-        debugPrint(buf);
+        printIfPinLow(buf, debugPin);
     }
 
     /// @brief Vrací aktuální obálku signálu
@@ -153,7 +154,7 @@ private:
         if (!client)
             return;
 
-        debugPrint("Klient připojen, čekám na počet senzorů...");
+        printIfPinLow("Klient připojen, čekám na počet senzorů...", debugPin);
 
         unsigned long connectTime = millis(); // čas připojení
         char input[10] = {0};
@@ -171,7 +172,7 @@ private:
                 }
                 else
                 {
-                    debugPrint("Neplatný vstup od klienta.");
+                    printIfPinLow("Neplatný vstup od klienta.", debugPin);
                     client.stop();
                     return;
                 }
@@ -179,7 +180,7 @@ private:
         }
 
         // Po 3 vteřinách bez vstupu
-        debugPrint("Klient neposlal data do 3 vteřin - odpojuji.");
+        printIfPinLow("Klient neposlal data do 3 vteřin - odpojuji.", debugPin);
         client.stop();
     }
 
@@ -214,35 +215,33 @@ private:
     {
         if (!client || !client.connected())
         {
-            debugPrint("Klient odpojen během odesílání dat.");
+            printIfPinLow("Klient odpojen během odesílání dat.", debugPin);
             cleanupClient();
             return;
         }
 
-        if (client.available())
-        {
-            const int bufferSize = 64;
-            char inputBuffer[bufferSize] = {0};
-            int index = 0;
-            while (client.available() && index < bufferSize - 1)
-            {
-                char c = client.read();
-                inputBuffer[index++] = c;
-            }
-            inputBuffer[index] = '\0';
-            if (strstr(inputBuffer, "DISCONNECT") != nullptr)
-            {
-                debugPrint("Přijato 'DISCONNECT' od klienta.");
-                cleanupClient();
-                return;
-            }
-        }
-
         int sensorData[sensorCount];
+        char serialMsg[50] = "";
+
         for (int i = 0; i < sensorCount; i++)
         {
             sensors[i]->updateEnvelope();
             sensorData[i] = sensors[i]->isActive() ? 1 : 0;
+
+            char buffer[8];
+            dtostrf(sensors[i]->getEnvelope(), 6, 4, buffer);
+            strcat(serialMsg, buffer);
+            if (i < sensorCount - 1)
+                strcat(serialMsg, ",");
+        }
+
+        // Posílání reálných hodnot z EMG senzorů přes Serial
+        printIfPinLow(serialMsg, serialPrintPin);
+
+        if (digitalRead(serialPrintPin) == LOW)
+        {
+            // Výpis je aktivní na serial, TCP data neposíláme
+            return;
         }
 
         int newValue = 0;
@@ -272,8 +271,8 @@ private:
                 char msg[20];
                 snprintf(msg, sizeof(msg), "%d\n", currentWindowValue);
                 client.print(msg);
-                debugPrint(msg);
-                debugPrint("Data odeslána klientovi.");
+                printIfPinLow(msg, debugPin);
+                printIfPinLow("Data odeslána klientovi.", debugPin);
             }
 
             windowStartTime = 0;
@@ -283,13 +282,13 @@ private:
         if (now - lastAliveTime >= aliveIntervalMs)
         {
             client.print("ALIVE\n");
-            debugPrint("Odesláno: ALIVE");
+            printIfPinLow("Odesláno: ALIVE", debugPin);
             lastAliveTime = now;
         }
 
         if (!client.connected())
         {
-            debugPrint("Klient odpojen po odeslání dat.");
+            printIfPinLow("Klient odpojen po odeslání dat.", debugPin);
             cleanupClient();
         }
     }
@@ -307,7 +306,7 @@ private:
         }
         sensorCount = 0;
         initialized = false;
-        debugPrint("Senzory byly vyčištěny.");
+        printIfPinLow("Senzory byly vyčištěny.", debugPin);
     }
 
     /// @brief Ukončení spojení s klientem a reset systému
@@ -316,7 +315,7 @@ private:
         client.stop();
         cleanupSensors();
         lastSentValue = -1;
-        debugPrint("Klient odpojen a systém resetován.");
+        printIfPinLow("Klient odpojen a systém resetován.", debugPin);
     }
 
     /// @brief Inicializace senzorů dle zadaného počtu a provedení kalibrace
@@ -327,7 +326,7 @@ private:
 
         if (count < 1 || count > maxSensors)
         {
-            debugPrint("Neplatný počet senzorů, inicializace selhala.");
+            printIfPinLow("Neplatný počet senzorů, inicializace selhala.", debugPin);
             return;
         }
 
@@ -339,7 +338,7 @@ private:
 
         lastAliveTime = millis();
 
-        debugPrint("Spouštím paralelní kalibraci senzorů...");
+        printIfPinLow("Spouštím paralelní kalibraci senzorů...", debugPin);
 
         const int samplingRate = 100;
         const int sampleInterval = 1000 / samplingRate;
@@ -384,13 +383,13 @@ private:
 
             snprintf(buf, sizeof(buf), "Senzor %d - průměr: %s, směr. odch.: %s, prah: %s",
                      i, meanStr, stddevStr, thresholdStr);
-            debugPrint(buf);
+            printIfPinLow(buf, debugPin);
         }
-        debugPrint("Paralelní kalibrace dokončena.");
+        printIfPinLow("Paralelní kalibrace dokončena.", debugPin);
 
         char msg[50];
         snprintf(msg, sizeof(msg), "Inicializováno %d EMG senzor(ů).", sensorCount);
-        debugPrint(msg);
+        printIfPinLow(msg, debugPin);
         initialized = true;
     }
 
@@ -407,11 +406,11 @@ public:
         {
             char debugMessage[60];
             snprintf(debugMessage, sizeof(debugMessage), "Připojování k SSID: %s", ssid);
-            debugPrint(debugMessage);
+            printIfPinLow(debugMessage, debugPin);
             status = WiFi.begin(ssid, pass);
             delay(5000);
         }
-        debugPrint("WiFi připojeno");
+        printIfPinLow("WiFi připojeno", debugPin);
         server.begin();
     }
 
@@ -426,7 +425,7 @@ public:
         {
             if (!wifiDisconnectedPrinted)
             {
-                debugPrint("WiFi odpojeno, připojuji znovu...");
+                printIfPinLow("WiFi odpojeno, připojuji znovu...", debugPin);
                 wifiDisconnectedPrinted = true;
             }
             beginWiFi();
@@ -441,7 +440,7 @@ public:
         {
             if (!noClientPrinted)
             {
-                debugPrint("Žádný klient není připojen.");
+                printIfPinLow("Žádný klient není připojen.", debugPin);
                 noClientPrinted = true;
             }
             handleNewClient();
@@ -456,7 +455,7 @@ public:
         {
             if (!notInitializedPrinted)
             {
-                debugPrint("Senzory nejsou inicializovány.");
+                printIfPinLow("Senzory nejsou inicializovány.", debugPin);
                 notInitializedPrinted = true;
             }
             return;
@@ -476,10 +475,11 @@ EMGSystem emgSystem(tcpPort);
 void setup()
 {
     pinMode(debugPin, INPUT_PULLUP);
-    Serial.begin(9600);
+    pinMode(serialPrintPin, INPUT_PULLUP);
+    Serial.begin(serialBaudRate);
     while (!Serial)
         ;
-    debugPrint("Start systému...");
+    printIfPinLow("Start systému...", debugPin);
     emgSystem.beginWiFi();
 
     IPAddress ip = WiFi.localIP();
@@ -487,8 +487,13 @@ void setup()
     snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
     char msg[40];
     snprintf(msg, sizeof(msg), "IP adresa: %s", ipStr);
-    debugPrint(msg);
-    debugPrint("Systém připraven, čekám na klienta...");
+    Serial.println(msg);
+    printIfPinLow("Systém připraven, čekám na klienta...", debugPin);
+    while (digitalRead(debugPin) == LOW && digitalRead(serialPrintPin) == LOW) // čeká na aktivaci debug pinu
+    {
+        Serial.println("Pro správné zasílání dat přes serial je potřeba mít zapojen debug pin (pin 7), nebo serial print pin (pin 6). NE OBOJÍ!");
+        delay(1000);
+    }
 }
 
 /// @brief Hlavní smyčka programu
