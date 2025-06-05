@@ -1,22 +1,68 @@
 #include <SPI.h>
 #include <WiFiNINA.h>
 
-// --- Konstanty ---
-const char ssid[] = "Zizice_doma";                /// @brief SSID WiFi sítě
-const char pass[] = "Pavel_Olinka";               /// @brief Heslo k WiFi síti
-const int tcpPort = 8888;                         /// @brief TCP port pro server
-const int refreshRateHz = 100;                    /// @brief Frekvence aktualizace v Hz
-const int refreshRate = 1000 / refreshRateHz;     /// @brief Doba mezi aktualizacemi v ms
-const int debugPin = 7;                           /// @brief Pin pro aktivaci debug výpisu
-const int serialPrintPin = 6;                     /// @brief Pin pro výpis zasílaných zpráv přes Serial
-const int serialBaudRate = 9600;                  /// @brief Baud rate pro Serial komunikaci
-const int maxSensors = 4;                         /// @brief Maximální počet podporovaných EMG senzorů
-const int emgPins[maxSensors] = {A0, A1, A2, A3}; /// @brief Analogové piny pro senzory
-const uint16_t aliveIntervalMs = 1500;            /// @brief Interval mezi ALIVE zprávami v ms
+/**
+ * @brief WiFi konfigurace a TCP port
+ */
+const char ssid[] = "Zizice_doma";  // SSID WiFi sítě
+const char pass[] = "Pavel_Olinka"; // Heslo k WiFi síti
+const int tcpPort = 8888;           // TCP port pro server
 
-/// @brief Vypíše debug zprávu do Serial monitoru, pokud je pin v LOW.
-/// @param message Zpráva k vypsání
-/// @param pin Pin, který aktivuje debug výpis (LOW = aktivní)
+/**
+ * @brief Parametry systému a pinů
+ */
+const int refreshRateHz = 1000;                   // Frekvence aktualizace v Hz
+const int refreshRate = 1000 / refreshRateHz;     // Perioda smyčky v ms
+const int debugPin = 7;                           // Pin pro výpis debug informací
+const int serialPrintPin = 6;                     // Pin pro výpis dat přes Serial
+const int serialBaudRate = 9600;                  // Baud rate pro Serial
+const int maxSensors = 4;                         // Maximální počet podporovaných senzorů
+const int emgPins[maxSensors] = {A0, A1, A2, A3}; // Analogové piny EMG senzorů
+const uint16_t aliveIntervalMs = 2000;            // Interval mezi "ALIVE" zprávami
+
+/**
+ * @struct CommandEntry
+ * @brief Struktura příkazu s kódem a textovým popisem
+ */
+struct CommandEntry
+{
+    const uint8_t code; // Číselný kód příkazu
+    const char *label;  // Textový popis příkazu
+};
+
+/**
+ * @brief Tabulka dostupných příkazů
+ */
+const CommandEntry commandTable[] = {
+    {1, "LEFT"},
+    {2, "RIGHT"},
+    {3, "UP"},
+    {4, "DOWN"},
+    {5, "FORWARD"},
+    {6, "BACKWARD"},
+    {7, "OPEN"},
+    {8, "CLOSE"}};
+
+/**
+ * @brief Vrátí textový název příkazu na základě jeho kódu
+ * @param code Číselný kód příkazu
+ * @return Textový popis nebo "UNKNOWN" při neznámém kódu
+ */
+const char *getCommandLabel(uint8_t code)
+{
+    for (const auto &entry : commandTable)
+    {
+        if (entry.code == code)
+            return entry.label;
+    }
+    return "UNKNOWN";
+}
+
+/**
+ * @brief Vytiskne zprávu přes Serial pokud je daný pin LOW
+ * @param message Zpráva k výpisu
+ * @param pin Pin, který musí být LOW
+ */
 void printIfPinLow(const char *message, int pin)
 {
     if (digitalRead(pin) == LOW)
@@ -25,278 +71,275 @@ void printIfPinLow(const char *message, int pin)
     }
 }
 
-/// @brief Třída pro jeden EMG senzor, včetně výpočtu obálky a kalibrace
+/**
+ * @class EMGSensor
+ * @brief Třída reprezentující jeden EMG senzor
+ */
 class EMGSensor
 {
 private:
-    int pin;
-    float alpha = 0.4;
-    float envelope = 0.0;
-    float threshold = 0.2;
+    const int pin;               // Analogový pin senzoru
+    float alpha = 0.6;           // Koeficient pro exponenciální vyhlazování
+    float envelope = 0.0;        // Aktuální hodnota obálky signálu
+    float thresholdUpper = 0.2;  // Horní práh pro detekci aktivity
+    float thresholdLower = 0.05; // Dolní práh pro detekci aktivity
+    float mean = 0.0;            // Průměrná hodnota signálu
 
 public:
-    /// @brief Konstruktor EMG senzoru
-    /// @param analogPin Analogový pin, ke kterému je senzor připojen
+    /**
+     * @brief Konstruktor EMGSensoru
+     * @param analogPin Analogový pin senzoru
+     */
     EMGSensor(int analogPin) : pin(analogPin)
     {
         pinMode(pin, INPUT);
     }
 
-    /// @brief Čtení napětí ze senzoru
-    /// @param referenceVoltage Referenční napětí
-    /// @param adcResolution Rozlišení ADC převodníku
-    /// @return Napětí v rozsahu 0 - referenceVoltage
+    /**
+     * @brief Načte napětí ze senzoru
+     * @param referenceVoltage Referenční napětí (default 5.0V)
+     * @param adcResolution Rozlišení ADC (default 1023)
+     * @return Naměřené napětí
+     */
     float readVoltage(float referenceVoltage = 5.0, int adcResolution = 1023)
     {
         return analogRead(pin) * (referenceVoltage / adcResolution);
     }
 
-    /// @brief Aktualizace obálky signálu pomocí EMA filtru
-    /// @param referenceVoltage Referenční napětí
-    /// @return Nová hodnota obálky
+    /**
+     * @brief Aktualizuje obálku signálu
+     * @param referenceVoltage Referenční napětí (default 5.0V)
+     * @return Nová hodnota obálky
+     */
     float updateEnvelope(float referenceVoltage = 5.0)
     {
         float voltage = readVoltage(referenceVoltage);
-        float centered = voltage - (referenceVoltage / 2.0);
+        float centered = voltage - (referenceVoltage / 3.0);
         float rectified = fabs(centered);
         envelope = alpha * rectified + (1 - alpha) * envelope;
         return envelope;
     }
 
-    /// @brief Zjištění, zda je aktivita nad prahem
-    /// @return True, pokud obálka překročila práh
-    bool isActive() const { return envelope > threshold; }
+    /**
+     * @brief Zjistí, zda je senzor aktivní (nad prahem)
+     * @return True pokud je aktivní
+     */
+    bool isActive() const { return envelope > thresholdUpper; }
 
-    /// @brief Kalibrace senzoru založená na průměru a směrodatné odchylce
-    /// @param durationMs Doba kalibrace v milisekundách
+    /**
+     * @brief Kalibruje senzor po zadanou dobu
+     * @param durationMs Doba kalibrace v ms (default 3000)
+     */
     void calibrate(unsigned long durationMs = 3000)
     {
-        const int samplingRate = 100;
-        const int sampleInterval = 1000 / samplingRate;
-        const int maxSamples = durationMs / sampleInterval;
-
+        const int maxSamples = 500;
         float samples[maxSamples];
         int count = 0;
 
-        for (unsigned long tStart = millis(); millis() - tStart < durationMs; delay(sampleInterval))
+        unsigned long tStart = millis();
+        while (millis() - tStart < durationMs && count < maxSamples)
         {
             updateEnvelope();
-            if (count < maxSamples)
-            {
-                samples[count++] = envelope;
-            }
+            samples[count++] = envelope;
+            delay(refreshRate);
         }
 
         float sum = 0;
         for (int i = 0; i < count; i++)
             sum += samples[i];
-        float mean = sum / count;
+        mean = sum / count;
 
         float varSum = 0;
         for (int i = 0; i < count; i++)
             varSum += pow(samples[i] - mean, 2);
         float stdDev = sqrt(varSum / count);
 
-        threshold = mean + 1.5 * stdDev;
+        thresholdUpper = mean + 3.0 * stdDev;
+        thresholdLower = mean - 3.0 * stdDev;
 
         printIfPinLow("Kalibrace:", debugPin);
 
-        char buf[50];
-        char floatStr[20];
+        String msg;
 
-        dtostrf(mean, 7, 4, floatStr); // šířka 7 znaků, 4 desetinná místa
-        snprintf(buf, sizeof(buf), "Průměr: %s", floatStr);
-        printIfPinLow(buf, debugPin);
+        msg = "Průměr: " + String(mean, 4);
+        printIfPinLow(msg.c_str(), debugPin);
 
-        dtostrf(stdDev, 7, 4, floatStr);
-        snprintf(buf, sizeof(buf), "Směrodatná odchylka: %s", floatStr);
-        printIfPinLow(buf, debugPin);
+        msg = "Směrodatná odchylka: " + String(stdDev, 4);
+        printIfPinLow(msg.c_str(), debugPin);
 
-        dtostrf(threshold, 7, 4, floatStr);
-        snprintf(buf, sizeof(buf), "Nastaven prah: %s", floatStr);
-        printIfPinLow(buf, debugPin);
+        msg = "Nastaven prah upper: " + String(thresholdUpper, 4);
+        printIfPinLow(msg.c_str(), debugPin);
+
+        msg = "Nastaven prah lower: " + String(thresholdLower, 4);
+        printIfPinLow(msg.c_str(), debugPin);
     }
 
-    /// @brief Vrací aktuální obálku signálu
-    /// @return Poslední hodnota obálky
-    float getEnvelope() const
-    {
-        return envelope;
-    }
-
-    /// @brief Nastaví nový práh pro detekci aktivity
-    /// @param t Nová hodnota prahu
-    void setThreshold(float t)
-    {
-        threshold = t;
-    }
+    /**
+     * @brief Vrací aktuální hodnotu obálky
+     * @return Hodnota obálky
+     */
+    float getEnvelope() const { return envelope; }
 };
 
-/// @brief Třída reprezentující celý systém EMG senzorů a TCP komunikace
+/**
+ * @class EMGSystem
+ * @brief Třída pro správu EMG systému a komunikace
+ */
 class EMGSystem
 {
 private:
-    EMGSensor *sensors[maxSensors];
-    int sensorCount;
-    WiFiServer server;
-    WiFiClient client;
-    bool initialized = false;
-    long lastAliveTime = 0;
-    int lastSentValue = -1;
-    int currentWindowValue = 0;
-    unsigned long windowStartTime = 0;
-    const unsigned long sendDelayMs = 1500;
+    EMGSensor *sensors[2];               // Pole dvou EMG senzorů
+    WiFiServer server;                   // TCP server
+    WiFiClient client;                   // TCP klient
+    bool initialized = false;            // Příznak inicializace systému
+    long lastAliveTime = 0;              // Čas poslední ALIVE zprávy
+    int cycledValue = 0;                 // Aktuálně zvolená hodnota příkazu
+    bool emg1LastActive = false;         // Stav aktivity EMG1 v předchozím cyklu
+    bool emg2LastActive = false;         // Stav aktivity EMG2 v předchozím cyklu
+    unsigned long lastCycleTime = 0;     // Čas posledního cyklu volby
+    unsigned long lastSendTime = 0;      // Čas posledního odeslání
+    const unsigned long cooldown = 1000; // Cooldown mezi akcemi v ms
+    bool wasClientConnected = false;     // Příznak předchozího připojení klienta
 
-    /// @brief Přijímá nového klienta a inicializuje senzory podle vstupu
-    void handleNewClient()
+    /**
+     * @brief Zpracuje zprávy od klienta
+     */
+    void handleClientMessages()
     {
-        client = server.available();
-        if (!client)
-            return;
-
-        printIfPinLow("Klient připojen, čekám na počet senzorů...", debugPin);
-
-        unsigned long connectTime = millis(); // čas připojení
-        char input[10] = {0};
-
-        // Čekej max. 3 sekundy na vstup
-        while (millis() - connectTime < 3000)
+        if (client.available())
         {
-            if (readClientInput(input, sizeof(input)))
+            String message = client.readStringUntil('\n');
+            message.trim();
+            message.toUpperCase();
+
+            if (message == "DISCONNECT")
             {
-                int count = atoi(input);
-                if (count >= 1 && count <= maxSensors)
-                {
-                    initSensors(count);
-                    return;
-                }
-                else
-                {
-                    printIfPinLow("Neplatný vstup od klienta.", debugPin);
-                    client.stop();
-                    return;
-                }
+                printIfPinLow("DISCONNECT příkaz přijat. Ukončuji spojení...", debugPin);
+                cleanupClient();
             }
         }
-
-        // Po 3 vteřinách bez vstupu
-        printIfPinLow("Klient neposlal data do 3 vteřin - odpojuji.", debugPin);
-        client.stop();
     }
 
-    /// @brief Načte vstup od klienta do bufferu
-    /// @param buffer Výstupní buffer
-    /// @param bufferSize Velikost bufferu
-    /// @param timeoutMs Timeout pro čekání na vstup
-    /// @return True pokud byl vstup úspěšně načten
-    bool readClientInput(char *buffer, size_t bufferSize, uint16_t timeoutMs = 3000)
+    /**
+     * @brief Odesílá ALIVE zprávu v nastaveném intervalu
+     */
+    void sendAliveIfNeeded()
     {
-        size_t index = 0;
-        unsigned long timeout = millis() + timeoutMs;
-        while (millis() < timeout)
-        {
-            if (client.available())
-            {
-                char c = client.read();
-                if (c == '\n' || index >= bufferSize - 1)
-                {
-                    buffer[index] = '\0';
-                    return true;
-                }
-                buffer[index++] = c;
-            }
-        }
-        buffer[0] = '\0';
-        return false;
-    }
-
-    /// @brief Odesílá zakódovaná data klientovi, včetně ALIVE zpráv
-    void sendDataToClient()
-    {
-        if (!client || !client.connected())
-        {
-            printIfPinLow("Klient odpojen během odesílání dat.", debugPin);
-            cleanupClient();
-            return;
-        }
-
-        int sensorData[sensorCount];
-        char serialMsg[50] = "";
-
-        for (int i = 0; i < sensorCount; i++)
-        {
-            sensors[i]->updateEnvelope();
-            sensorData[i] = sensors[i]->isActive() ? 1 : 0;
-
-            char buffer[8];
-            dtostrf(sensors[i]->getEnvelope(), 6, 4, buffer);
-            strcat(serialMsg, buffer);
-            if (i < sensorCount - 1)
-                strcat(serialMsg, ",");
-        }
-
-        // Posílání reálných hodnot z EMG senzorů přes Serial
-        printIfPinLow(serialMsg, serialPrintPin);
-
-        if (digitalRead(serialPrintPin) == LOW)
-        {
-            // Výpis je aktivní na serial, TCP data neposíláme
-            return;
-        }
-
-        int newValue = 0;
-        for (int i = 0; i < sensorCount; i++)
-        {
-            newValue += sensorData[i] << (sensorCount - 1 - i);
-        }
-
         unsigned long now = millis();
-
-        if (windowStartTime == 0)
-        {
-            windowStartTime = now;
-            currentWindowValue = newValue;
-        }
-
-        if (newValue > currentWindowValue)
-        {
-            currentWindowValue = newValue;
-        }
-
-        if (now - windowStartTime >= sendDelayMs)
-        {
-            if (currentWindowValue != lastSentValue)
-            {
-                lastSentValue = currentWindowValue;
-                char msg[20];
-                snprintf(msg, sizeof(msg), "%d\n", currentWindowValue);
-                client.print(msg);
-                printIfPinLow(msg, debugPin);
-                printIfPinLow("Data odeslána klientovi.", debugPin);
-            }
-
-            windowStartTime = 0;
-            currentWindowValue = 0;
-        }
-
         if (now - lastAliveTime >= aliveIntervalMs)
         {
             client.print("ALIVE\n");
             printIfPinLow("Odesláno: ALIVE", debugPin);
             lastAliveTime = now;
         }
+    }
 
-        if (!client.connected())
+    /**
+     * @brief Hlavní logika zpracování EMG signálů a komunikace
+     */
+    void handleLogic()
+    {
+        static unsigned long zeroSendTime = 0;
+        static bool sendZeroPending = false;
+        static const unsigned int sendZeroDelay = 200; // Cooldown pro odeslání "0"
+
+        sensors[0]->updateEnvelope();
+        sensors[1]->updateEnvelope();
+
+        bool emg1Active = sensors[0]->isActive();
+        bool emg2Active = sensors[1]->isActive();
+        unsigned long now = millis();
+
+        if (emg1Active && !emg1LastActive && (now - lastCycleTime >= cooldown))
         {
-            printIfPinLow("Klient odpojen po odeslání dat.", debugPin);
-            cleanupClient();
+            cycledValue++;
+            if (cycledValue > sizeof(commandTable) / sizeof(CommandEntry))
+            {
+                cycledValue = 1;
+            }
+
+            lastCycleTime = now;
+
+            String msg = "Navoleno: " + String(cycledValue) + " (" + String(getCommandLabel(cycledValue)) + ")";
+            printIfPinLow(msg.c_str(), debugPin);
+        }
+
+        if (emg2Active && !emg2LastActive && (now - lastSendTime >= cooldown))
+        {
+            if (cycledValue == 0)
+            {
+                printIfPinLow("Žádný příkaz nenavolen.", debugPin);
+                return;
+            }
+            String msg = String(cycledValue) + "\n";
+            client.print(msg);
+            printIfPinLow(msg.c_str(), debugPin);
+            lastSendTime = now;
+
+            zeroSendTime = millis() + sendZeroDelay;
+
+            sendZeroPending = true;
+
+            if (sendZeroPending && millis() >= zeroSendTime)
+            {
+                client.print("0\n");
+                printIfPinLow("0", debugPin);
+                sendZeroPending = false;
+            }
+        }
+
+        emg1LastActive = emg1Active;
+        emg2LastActive = emg2Active;
+
+        if (digitalRead(serialPrintPin) == LOW)
+        {
+            String serialMsg = String(sensors[0]->getEnvelope(), 4) + "," + String(sensors[1]->getEnvelope(), 4);
+            printIfPinLow(serialMsg.c_str(), serialPrintPin);
         }
     }
 
-    /// @brief Vyčištění senzorů
+    /**
+     * @brief Kalibruje oba senzory
+     */
+    void calibrateSensors()
+    {
+        for (int i = 0; i < 2; i++)
+            sensors[i]->calibrate();
+        initialized = true;
+    }
+
+    /**
+     * @brief Inicializuje senzory
+     */
+    void initSensors()
+    {
+        cleanupSensors();
+        for (int i = 0; i < 2; i++)
+            sensors[i] = new EMGSensor(emgPins[i]);
+        calibrateSensors();
+        cycledValue = 1;
+        printIfPinLow("Systém inicializován pro 2 EMG senzory.", debugPin);
+    }
+
+    /**
+     * @brief Zpracuje nového klienta
+     */
+    void handleNewClient()
+    {
+        client = server.available();
+        if (!client)
+            return;
+        printIfPinLow("Klient připojen - inicializuji senzory", debugPin);
+        initSensors();
+        wasClientConnected = true;
+    }
+
+    /**
+     * @brief Uvolní paměť senzorů
+     */
     void cleanupSensors()
     {
-        for (int i = 0; i < maxSensors; i++)
+        for (int i = 0; i < 2; i++)
         {
             if (sensors[i] != nullptr)
             {
@@ -304,109 +347,37 @@ private:
                 sensors[i] = nullptr;
             }
         }
-        sensorCount = 0;
         initialized = false;
-        printIfPinLow("Senzory byly vyčištěny.", debugPin);
     }
 
-    /// @brief Ukončení spojení s klientem a reset systému
+    /**
+     * @brief Odpojí klienta a resetuje systém
+     */
     void cleanupClient()
     {
         client.stop();
         cleanupSensors();
-        lastSentValue = -1;
         printIfPinLow("Klient odpojen a systém resetován.", debugPin);
-    }
-
-    /// @brief Inicializace senzorů dle zadaného počtu a provedení kalibrace
-    /// @param count Počet senzorů
-    void initSensors(int count)
-    {
-        cleanupSensors();
-
-        if (count < 1 || count > maxSensors)
-        {
-            printIfPinLow("Neplatný počet senzorů, inicializace selhala.", debugPin);
-            return;
-        }
-
-        sensorCount = count;
-        for (int i = 0; i < sensorCount; i++)
-        {
-            sensors[i] = new EMGSensor(emgPins[i]);
-        }
-
-        lastAliveTime = millis();
-
-        printIfPinLow("Spouštím paralelní kalibraci senzorů...", debugPin);
-
-        const int samplingRate = 100;
-        const int sampleInterval = 1000 / samplingRate;
-        const int maxSamples = 3000 / sampleInterval;
-
-        float samples[maxSensors][maxSamples] = {0};
-        int counts[maxSensors] = {0};
-        unsigned long tStart = millis();
-
-        while (millis() - tStart < 3000)
-        {
-            for (int i = 0; i < sensorCount; i++)
-            {
-                sensors[i]->updateEnvelope();
-                if (counts[i] < maxSamples)
-                {
-                    samples[i][counts[i]++] = sensors[i]->getEnvelope();
-                }
-            }
-            delay(sampleInterval);
-        }
-
-        for (int i = 0; i < sensorCount; i++)
-        {
-            float sum = 0;
-            for (int j = 0; j < counts[i]; j++)
-                sum += samples[i][j];
-            float mean = sum / counts[i];
-
-            float varSum = 0;
-            for (int j = 0; j < counts[i]; j++)
-                varSum += pow(samples[i][j] - mean, 2);
-            float stdDev = sqrt(varSum / counts[i]);
-
-            sensors[i]->setThreshold(mean + 1.5 * stdDev);
-
-            char buf[80];
-            char meanStr[10], stddevStr[10], thresholdStr[10];
-            dtostrf(mean, 6, 4, meanStr);
-            dtostrf(stdDev, 6, 4, stddevStr);
-            dtostrf(mean + 1.5 * stdDev, 6, 4, thresholdStr);
-
-            snprintf(buf, sizeof(buf), "Senzor %d - průměr: %s, směr. odch.: %s, prah: %s",
-                     i, meanStr, stddevStr, thresholdStr);
-            printIfPinLow(buf, debugPin);
-        }
-        printIfPinLow("Paralelní kalibrace dokončena.", debugPin);
-
-        char msg[50];
-        snprintf(msg, sizeof(msg), "Inicializováno %d EMG senzor(ů).", sensorCount);
-        printIfPinLow(msg, debugPin);
-        initialized = true;
+        wasClientConnected = false;
     }
 
 public:
-    /// @brief Konstruktor EMG systému
-    /// @param port TCP port pro server
-    EMGSystem(int port) : server(port), sensorCount(0) {}
+    /**
+     * @brief Konstruktor EMGSystemu
+     * @param port TCP port serveru
+     */
+    EMGSystem(int port) : server(port) {}
 
-    /// @brief Zahájení WiFi komunikace a spuštění serveru
+    /**
+     * @brief Inicializuje WiFi připojení a server
+     */
     void beginWiFi()
     {
         int status = WL_IDLE_STATUS;
         while (status != WL_CONNECTED)
         {
-            char debugMessage[60];
-            snprintf(debugMessage, sizeof(debugMessage), "Připojování k SSID: %s", ssid);
-            printIfPinLow(debugMessage, debugPin);
+            String debugMessage = String("Připojování k SSID: ") + ssid;
+            printIfPinLow(debugMessage.c_str(), debugPin);
             status = WiFi.begin(ssid, pass);
             delay(5000);
         }
@@ -414,7 +385,9 @@ public:
         server.begin();
     }
 
-    /// @brief Hlavní smyčka pro obsluhu EMG dat a komunikace
+    /**
+     * @brief Hlavní aktualizační metoda systému (volat v loop)
+     */
     void update()
     {
         static bool wifiDisconnectedPrinted = false;
@@ -432,24 +405,27 @@ public:
             return;
         }
         else
-        {
             wifiDisconnectedPrinted = false;
-        }
 
         if (!client || !client.connected())
         {
+            if (wasClientConnected)
+            {
+                printIfPinLow("Klient ztratil spojení.", debugPin);
+                cleanupClient();
+            }
+
             if (!noClientPrinted)
             {
                 printIfPinLow("Žádný klient není připojen.", debugPin);
                 noClientPrinted = true;
             }
+
             handleNewClient();
             return;
         }
         else
-        {
             noClientPrinted = false;
-        }
 
         if (!initialized)
         {
@@ -461,17 +437,22 @@ public:
             return;
         }
         else
-        {
             notInitializedPrinted = false;
-        }
 
-        sendDataToClient();
+        handleLogic();
+        handleClientMessages();
+        sendAliveIfNeeded();
     }
 };
 
+/**
+ * @brief Globální instance EMG systému
+ */
 EMGSystem emgSystem(tcpPort);
 
-/// @brief Inicializace systému při startu
+/**
+ * @brief Inicializační funkce Arduino
+ */
 void setup()
 {
     pinMode(debugPin, INPUT_PULLUP);
@@ -479,24 +460,26 @@ void setup()
     Serial.begin(serialBaudRate);
     while (!Serial)
         ;
+
     printIfPinLow("Start systému...", debugPin);
     emgSystem.beginWiFi();
 
     IPAddress ip = WiFi.localIP();
-    char ipStr[16];
-    snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-    char msg[40];
-    snprintf(msg, sizeof(msg), "IP adresa: %s", ipStr);
+    String ipStr = String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+    String msg = "IP adresa: " + ipStr;
     Serial.println(msg);
     printIfPinLow("Systém připraven, čekám na klienta...", debugPin);
-    while (digitalRead(debugPin) == LOW && digitalRead(serialPrintPin) == LOW) // čeká na aktivaci debug pinu
+
+    while (digitalRead(debugPin) == LOW && digitalRead(serialPrintPin) == LOW)
     {
         Serial.println("Pro správné zasílání dat přes serial je potřeba mít zapojen debug pin (pin 7), nebo serial print pin (pin 6). NE OBOJÍ!");
         delay(1000);
     }
 }
 
-/// @brief Hlavní smyčka programu
+/**
+ * @brief Hlavní smyčka Arduino
+ */
 void loop()
 {
     int timeStart = millis();
