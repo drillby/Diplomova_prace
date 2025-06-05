@@ -50,9 +50,9 @@ class EMGSystem:
 
                 self.heartbeat_running = True
                 threading.Thread(target=self.send_heartbeat, daemon=True).start()
-                threading.Thread(target=self.read_input_loop, daemon=True).start()
+                threading.Thread(target=self.read_input, daemon=True).start()
 
-                self.send_loop()
+                self.send()
             else:
                 print("Neplatný počet senzorů.")
                 self.client_socket.close()
@@ -61,7 +61,7 @@ class EMGSystem:
             print("Chyba během čtení od klienta:", e)
             self.client_socket.close()
 
-    def send_loop(self):
+    def send(self):
         try:
             while self.initialized and self.client_socket:
                 # kontrola příkazu DISCONNECT
@@ -102,7 +102,7 @@ class EMGSystem:
                 print("Chyba při odesílání ALIVE:", e)
                 break
 
-    def read_input_loop(self):
+    def read_input(self):
         max_val = 2**self.num_sensors - 1
         print(f"Zadej číslo v rozsahu 0 až {max_val} pro odeslání:")
         while self.initialized:
