@@ -65,6 +65,7 @@ def update():
                 plot.setLabel("left", "Hodnota")
                 plot.setLabel("bottom", "Čas", units="s")
                 plot.setXRange(0, WINDOW_WIDTH_SEC)
+                plot.setYRange(-1, 1)
                 plot.showGrid(x=True, y=True)
 
                 curve = plot.plot(timestamps, list(queue))
