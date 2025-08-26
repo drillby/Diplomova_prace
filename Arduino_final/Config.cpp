@@ -37,7 +37,7 @@ const int serialPrintPin = 6;                     // Pin pro výpis dat přes Se
 const int resetNetworkCreds = 5;                  // Pin pro reset síťových přihlašovacích údajů
 const int maxSensors = 4;                         // Maximální počet podporovaných senzorů
 const int emgPins[maxSensors] = {A0, A1, A2, A3}; // Analogové piny EMG senzorů
-const uint16_t aliveIntervalMs = 2000;            // Interval mezi "ALIVE" zprávami
+const uint16_t aliveIntervalMs = 10000;           // Interval mezi "ALIVE" zprávami
 
 /**
  * @brief Resetuje síťové přihlašovací údaje na placeholder hodnoty
