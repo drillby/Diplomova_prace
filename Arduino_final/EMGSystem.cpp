@@ -7,7 +7,7 @@
  * @brief Konstruktor EMGSystemu
  * @param port TCP port serveru
  */
-EMGSystem::EMGSystem(int port) : server(port) {}
+EMGSystem::EMGSystem(int port) : server(port), lcdDisplay(nullptr) {}
 
 /**
  * @brief Spustí TCP server pro EMG systém
@@ -87,6 +87,16 @@ void EMGSystem::handleLogic()
 
         String msg = "Navoleno: " + String(cycledValue) + " (" + String(getCommandLabel(cycledValue)) + ")";
         printIfPinLow(msg.c_str(), debugPin);
+
+        // Update LCD with selected command
+        if (lcdDisplay && lcdDisplay->isReady() && client && client.connected())
+        {
+            lcdDisplay->setBacklightColor(0, 255, 255); // Cyan pro výběr příkazu
+            lcdDisplay->clear();
+            lcdDisplay->printAt(0, 0, "Prikaz " + String(cycledValue));
+            String commandLabel = String(getCommandLabel(cycledValue));
+            lcdDisplay->printAt(0, 1, commandLabel.substring(0, 16));
+        }
     }
 
     if (emg2Active && !emg2LastActive && (now - lastSendTime >= cooldown))
@@ -148,8 +158,28 @@ void EMGSystem::handleNewClient()
     if (!client)
         return;
     printIfPinLow("Klient připojen - inicializuji senzory", debugPin);
+
+    // Update LCD with client connected
+    if (lcdDisplay && lcdDisplay->isReady())
+    {
+        lcdDisplay->setBacklightColor(0, 255, 0); // Zelená pro úspěšné připojení
+        lcdDisplay->clear();
+        lcdDisplay->printAt(0, 0, "Klient pripojen");
+        lcdDisplay->printAt(0, 1, "Kalibrace...");
+    }
+
     initSensors();
     wasClientConnected = true;
+
+    // After calibration, show initial command
+    if (lcdDisplay && lcdDisplay->isReady())
+    {
+        lcdDisplay->setBacklightColor(0, 255, 255); // Cyan pro výběr příkazu
+        lcdDisplay->clear();
+        lcdDisplay->printAt(0, 0, "Prikaz " + String(cycledValue));
+        String commandLabel = String(getCommandLabel(cycledValue));
+        lcdDisplay->printAt(0, 1, commandLabel.substring(0, 16));
+    }
 }
 
 /**
@@ -193,12 +223,34 @@ void EMGSystem::update()
         {
             printIfPinLow("Klient ztratil spojení.", debugPin);
             cleanupClient();
+
+            // Update LCD when client disconnects
+            if (lcdDisplay && lcdDisplay->isReady())
+            {
+                lcdDisplay->setBacklightColor(255, 165, 0); // Oranžová pro čekání
+                lcdDisplay->clear();
+                lcdDisplay->printAt(0, 0, "Cekam na klienta");
+                IPAddress ip = WiFi.localIP();
+                String ipStr = String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+                lcdDisplay->printAt(0, 1, ipStr.substring(0, 16));
+            }
         }
 
         if (!noClientPrinted)
         {
             printIfPinLow("Žádný klient není připojen.", debugPin);
             noClientPrinted = true;
+
+            // Show server IP when waiting for client
+            if (lcdDisplay && lcdDisplay->isReady())
+            {
+                lcdDisplay->setBacklightColor(255, 165, 0); // Oranžová pro čekání
+                lcdDisplay->clear();
+                lcdDisplay->printAt(0, 0, "Cekam na klienta");
+                IPAddress ip = WiFi.localIP();
+                String ipStr = String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+                lcdDisplay->printAt(0, 1, ipStr.substring(0, 16));
+            }
         }
 
         handleNewClient();
@@ -230,4 +282,13 @@ void EMGSystem::update()
 bool EMGSystem::isInitialized() const
 {
     return initialized;
+}
+
+/**
+ * @brief Nastaví pointer na LCD displej
+ * @param lcd Pointer na LCD displej
+ */
+void EMGSystem::setLCDDisplay(LCDDisplay *lcd)
+{
+    lcdDisplay = lcd;
 }

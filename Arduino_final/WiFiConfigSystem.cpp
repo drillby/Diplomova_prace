@@ -6,8 +6,9 @@
 /**
  * @brief Konstruktor WiFiConfigSystem
  * @param emgSys Reference na EMG systém
+ * @param lcd Pointer na LCD displej (volitelný)
  */
-WiFiConfigSystem::WiFiConfigSystem(EMGSystem &emgSys) : server(httpPort), isAPMode(false), initialized(false), emgSystem(emgSys) {}
+WiFiConfigSystem::WiFiConfigSystem(EMGSystem &emgSys, LCDDisplay *lcd) : server(httpPort), isAPMode(false), initialized(false), emgSystem(emgSys), lcdDisplay(lcd) {}
 
 /**
  * @brief Pokusí se připojit k WiFi síti
@@ -21,6 +22,15 @@ bool WiFiConfigSystem::connectToWiFi()
     printIfPinLow("Zkouším připojení k WiFi...", debugPin);
     printIfPinLow(("SSID: " + wifiSSID).c_str(), debugPin);
     printIfPinLow(("Pass length: " + String(wifiPass.length())).c_str(), debugPin);
+
+    // Update LCD
+    if (lcdDisplay && lcdDisplay->isReady())
+    {
+        lcdDisplay->clear();
+        lcdDisplay->setBacklightColor(255, 165, 0); // Oranžová pro připojování
+        lcdDisplay->printAt(0, 0, "Pripojovani WiFi");
+        lcdDisplay->printAt(0, 1, wifiSSID.substring(0, 16));
+    }
 
     // Disconnect any previous connection
     WiFi.disconnect();
@@ -48,6 +58,18 @@ bool WiFiConfigSystem::connectToWiFi()
         printIfPinLow(ipMsg.c_str(), debugPin);
         String rssiMsg = "Síla signálu: " + String(WiFi.RSSI());
         printIfPinLow(rssiMsg.c_str(), debugPin);
+
+        // Update LCD with success
+        if (lcdDisplay && lcdDisplay->isReady())
+        {
+            lcdDisplay->setBacklightColor(0, 255, 0); // Zelená pro úspěch
+            lcdDisplay->clear();
+            lcdDisplay->printAt(0, 0, "WiFi pripojeno!");
+            String ipStr = String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+            lcdDisplay->printAt(0, 1, ipStr.substring(0, 16));
+            delay(2000);
+        }
+
         return true;
     }
 
@@ -63,9 +85,29 @@ bool WiFiConfigSystem::connectToWiFi()
 bool WiFiConfigSystem::startAccessPoint()
 {
     printIfPinLow("Spouštím Access Point...", debugPin);
+
+    // Update LCD
+    if (lcdDisplay && lcdDisplay->isReady())
+    {
+        lcdDisplay->clear();
+        lcdDisplay->setBacklightColor(255, 255, 0); // Žlutá pro AP režim
+        lcdDisplay->printAt(0, 0, "Access Point");
+        lcdDisplay->printAt(0, 1, "Spousteni...");
+    }
+
     if (WiFi.beginAP(apSSID, apPass) != WL_AP_LISTENING)
     {
         printIfPinLow("Chyba při spouštění AP", debugPin);
+
+        // Update LCD with error
+        if (lcdDisplay && lcdDisplay->isReady())
+        {
+            lcdDisplay->setBacklightColor(255, 0, 0); // Červená pro chybu
+            lcdDisplay->clear();
+            lcdDisplay->printAt(0, 0, "Chyba AP!");
+            delay(2000);
+        }
+
         return false;
     }
 
@@ -75,6 +117,16 @@ bool WiFiConfigSystem::startAccessPoint()
     String ipMsg = "IP adresa AP: " + String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
     ;
     printIfPinLow(ipMsg.c_str(), debugPin);
+
+    // Update LCD with AP info
+    if (lcdDisplay && lcdDisplay->isReady())
+    {
+        lcdDisplay->setBacklightColor(255, 255, 0); // Žlutá pro AP režim
+        lcdDisplay->clear();
+        lcdDisplay->printAt(0, 0, "AP: EMG_Config");
+        String ipStr = String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+        lcdDisplay->printAt(0, 1, ipStr.substring(0, 16));
+    }
 
     // Spusť web server pouze v AP režimu
     server.begin();
@@ -582,4 +634,13 @@ String WiFiConfigSystem::getWiFiSSID() const
 bool WiFiConfigSystem::hasWiFiPassword() const
 {
     return wifiPass.length() > 0;
+}
+
+/**
+ * @brief Nastaví pointer na LCD displej
+ * @param lcd Pointer na LCD displej
+ */
+void WiFiConfigSystem::setLCDDisplay(LCDDisplay *lcd)
+{
+    lcdDisplay = lcd;
 }

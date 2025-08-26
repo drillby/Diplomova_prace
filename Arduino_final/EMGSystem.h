@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFiNINA.h>
 #include "EMGSensor.h"
+#include "LCDDisplay.h"
 
 /**
  * @class EMGSystem
@@ -24,6 +25,7 @@ private:
     unsigned long lastSendTime = 0;      // Čas posledního odeslání
     const unsigned long cooldown = 1000; // Cooldown mezi akcemi v ms
     bool wasClientConnected = false;     // Příznak předchozího připojení klienta
+    LCDDisplay *lcdDisplay;              // Pointer na LCD displej
 
     /**
      * @brief Zpracuje zprávy od klienta
@@ -86,6 +88,12 @@ public:
      * @brief Vrací příznak inicializace EMG systému
      */
     bool isInitialized() const;
+
+    /**
+     * @brief Nastaví pointer na LCD displej
+     * @param lcd Pointer na LCD displej
+     */
+    void setLCDDisplay(LCDDisplay *lcd);
 };
 
 #endif // EMG_SYSTEM_H

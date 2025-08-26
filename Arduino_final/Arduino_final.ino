@@ -7,12 +7,14 @@
 #include "EMGSensor.h"
 #include "EMGSystem.h"
 #include "WiFiConfigSystem.h"
+#include "LCDDisplay.h"
 
 /**
- * @brief Globální instance WiFi konfiguračního systému a EMG systému
+ * @brief Globální instance WiFi konfiguračního systému, EMG systému a LCD displeje
  */
+LCDDisplay display;
 EMGSystem emgSystem(tcpPort);
-WiFiConfigSystem wifiConfig(emgSystem);
+WiFiConfigSystem wifiConfig(emgSystem, &display);
 
 /**
  * @brief Inicializační funkce Arduino
@@ -50,6 +52,19 @@ void setup()
     }
 
     printIfPinLow("Start systému...", debugPin);
+
+    // Inicializace LCD displeje
+    if (display.begin(16, 2))
+    {
+        display.setBacklightColor(0, 100, 255); // Modrá barva pro start
+        display.printAt(0, 0, "EMG System");
+        display.printAt(0, 1, "Inicializace...");
+        delay(1000);
+    }
+
+    // Předání LCD displeje do systémů
+    emgSystem.setLCDDisplay(&display);
+
     wifiConfig.begin();
     printIfPinLow("Systém připraven.", debugPin);
 

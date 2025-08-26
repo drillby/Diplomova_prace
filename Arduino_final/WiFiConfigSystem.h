@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFiNINA.h>
 #include "EMGSystem.h"
+#include "LCDDisplay.h"
 
 /**
  * @class WiFiConfigSystem
@@ -12,12 +13,13 @@
 class WiFiConfigSystem
 {
 private:
-    WiFiServer server;    // HTTP server instance
-    String wifiSSID;      // Uložené WiFi SSID
-    String wifiPass;      // Uložené WiFi heslo
-    bool isAPMode;        // Příznak režimu Access Point
-    bool initialized;     // Příznak inicializace systému
-    EMGSystem &emgSystem; // Reference na EMG systém
+    WiFiServer server;      // HTTP server instance
+    String wifiSSID;        // Uložené WiFi SSID
+    String wifiPass;        // Uložené WiFi heslo
+    bool isAPMode;          // Příznak režimu Access Point
+    bool initialized;       // Příznak inicializace systému
+    EMGSystem &emgSystem;   // Reference na EMG systém
+    LCDDisplay *lcdDisplay; // Pointer na LCD displej
 
     /**
      * @brief Pokusí se připojit k WiFi síti
@@ -61,8 +63,9 @@ public:
     /**
      * @brief Konstruktor WiFiConfigSystem
      * @param emgSys Reference na EMG systém
+     * @param lcd Pointer na LCD displej (volitelný)
      */
-    WiFiConfigSystem(EMGSystem &emgSys);
+    WiFiConfigSystem(EMGSystem &emgSys, LCDDisplay *lcd = nullptr);
 
     /**
      * @brief Inicializuje WiFi systém a načte konfiguraci z EEPROM
@@ -91,6 +94,12 @@ public:
      * @return True pokud je heslo nastaveno
      */
     bool hasWiFiPassword() const;
+
+    /**
+     * @brief Nastaví pointer na LCD displej
+     * @param lcd Pointer na LCD displej
+     */
+    void setLCDDisplay(LCDDisplay *lcd);
 };
 
 #endif // WIFI_CONFIG_SYSTEM_H
