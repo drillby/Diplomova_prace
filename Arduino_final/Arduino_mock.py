@@ -3,11 +3,10 @@ import threading
 import time
 
 # --- Konstanty ---
-TCP_PORT = 8888
+TCP_PORT = 3000
 REFRESH_RATE_HZ = 1
 REFRESH_INTERVAL = 1.0 / REFRESH_RATE_HZ
 HEARTBEAT_INTERVAL = 1.5
-MAX_SENSORS = 4
 
 
 class EMGSystem:
@@ -16,11 +15,10 @@ class EMGSystem:
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket = None
         self.client_address = None
-        self.num_sensors = 0
-        self.last_sent_value = -1
         self.initialized = False
         self.heartbeat_running = False
         self.manual_value = None  # Hodnota zadaná uživatelem
+        self.last_sent_value = -1
 
     def start_server(self):
         self.server_socket.bind(("", self.port))
@@ -38,33 +36,40 @@ class EMGSystem:
 
     def handle_client(self):
         try:
+            # 1) Očekává se první zpráva: HANDSHAKE_REQUEST
             self.client_socket.settimeout(3.0)
-            input_data = self.client_socket.recv(10).decode().strip()
-            print(f"Přijatý vstup: {input_data}")
-            count = int(input_data)
+            first_msg = self.client_socket.recv(64).decode().strip()
+            print(f"Přijatý vstup: {first_msg}")
 
-            if 1 <= count <= MAX_SENSORS:
-                self.num_sensors = count
-                self.initialized = True
-                self.client_socket.settimeout(None)
-
-                self.heartbeat_running = True
-                threading.Thread(target=self.send_heartbeat, daemon=True).start()
-                threading.Thread(target=self.read_input, daemon=True).start()
-
-                self.send()
-            else:
-                print("Neplatný počet senzorů.")
+            if first_msg != "HANDSHAKE_REQUEST":
+                print("Neplatná handshake zpráva. Očekávám HANDSHAKE_REQUEST.")
                 self.client_socket.close()
+                return
+
+            # 2) Odpověď na handshake
+            # self.client_socket.sendall(b"HANDSHAKE\n")
+            # print("Odesláno: HANDSHAKE")
+
+            # 3) Přechod do běžného režimu
+            self.client_socket.settimeout(None)
+            self.initialized = True
+            self.heartbeat_running = True
+
+            # Pokud chceš heartbeat, odkomentuj řádek níže
+            # threading.Thread(target=self.send_heartbeat, daemon=True).start()
+
+            # Zahájíme vstup od uživatele (pevný rozsah 0–8) a smyčku odesílání
+            threading.Thread(target=self.read_input_loop, daemon=True).start()
+            self.send_loop()
 
         except (ValueError, socket.timeout) as e:
             print("Chyba během čtení od klienta:", e)
             self.client_socket.close()
 
-    def send(self):
+    def send_loop(self):
         try:
             while self.initialized and self.client_socket:
-                # kontrola příkazu DISCONNECT
+                # kontrola příkazu DISCONNECT od klienta (neblokující)
                 self.client_socket.setblocking(False)
                 try:
                     cmd = self.client_socket.recv(64).decode()
@@ -73,8 +78,10 @@ class EMGSystem:
                         break
                 except BlockingIOError:
                     pass
-                self.client_socket.setblocking(True)
+                finally:
+                    self.client_socket.setblocking(True)
 
+                # Odesílání nové hodnoty, pokud se změnila
                 if (
                     self.manual_value is not None
                     and self.manual_value != self.last_sent_value
@@ -102,8 +109,8 @@ class EMGSystem:
                 print("Chyba při odesílání ALIVE:", e)
                 break
 
-    def read_input(self):
-        max_val = 2**self.num_sensors - 1
+    def read_input_loop(self):
+        max_val = 8  # pevný rozsah 0–8
         print(f"Zadej číslo v rozsahu 0 až {max_val} pro odeslání:")
         while self.initialized:
             try:
