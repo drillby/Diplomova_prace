@@ -11,11 +11,20 @@
 void printIfPinLow(const char *message, int pin);
 
 /**
- * @brief Utility funkce pro práci s řetězci a URL dekódování
- * @param str Řetězec k dekódování
- * @return Dekódovaný řetězec
+ * @brief Vytiskne zprávu přes Serial pokud je daný pin LOW (F macro support)
+ * @param message Zpráva k výpisu (flash string)
+ * @param pin Pin, který musí být LOW
  */
-String urlDecode(const String &str);
+void printIfPinLow(const __FlashStringHelper *message, int pin);
+
+/**
+ * @brief Utility funkce pro práci s řetězci a URL dekódování
+ * @param str Řetězec k dekódování (C-string)
+ * @param buffer Buffer pro dekódovaný řetězec
+ * @param bufferSize Velikost bufferu
+ * @return Počet dekódovaných znaků nebo -1 při chybě
+ */
+int urlDecode(const char *str, char *buffer, int bufferSize);
 
 /**
  * @brief Restartuje Arduino pomocí watchdog timeru

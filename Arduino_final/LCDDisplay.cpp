@@ -19,7 +19,6 @@ LCDDisplay::~LCDDisplay()
     {
         clear();
         displayOff();
-        setBacklightColor(0, 0, 0); // Vypnutí podsvícení
     }
 }
 
@@ -47,39 +46,17 @@ bool LCDDisplay::begin(int cols, int rows)
     hideCursor();
     noBlink();
 
-    // Nastavení základního podsvícení (bílá barva)
-    setBacklightColor(255, 255, 255);
-
     isInitialized = true;
 
-    printIfPinLow("LCD displej inicializován úspěšně", debugPin);
+    printIfPinLow(F("LCD displej inicializován úspěšně"), debugPin);
     return true;
 }
 
 /**
- * @brief Nastaví RGB barvu podsvícení
- * @param red Červená složka (0-255)
- * @param green Zelená složka (0-255)
- * @param blue Modrá složka (0-255)
- */
-void LCDDisplay::setBacklightColor(int red, int green, int blue)
-{
-    if (!isInitialized)
-        return;
-
-    // Omezení hodnot na rozsah 0-255
-    red = constrain(red, 0, 255);
-    green = constrain(green, 0, 255);
-    blue = constrain(blue, 0, 255);
-
-    lcd.setRGB(red, green, blue);
-}
-
-/**
- * @brief Vypíše text na displej
+ * @brief Vypíše text na displej s možností formátování (C-string)
  * @param text Text k zobrazení
  */
-void LCDDisplay::print(const String &text)
+void LCDDisplay::print(const char *text)
 {
     if (!isInitialized)
         return;
@@ -87,10 +64,10 @@ void LCDDisplay::print(const String &text)
 }
 
 /**
- * @brief Vypíše text na displej s možností formátování
- * @param text Text k zobrazení
+ * @brief Vypíše text na displej s možností formátování (F macro support)
+ * @param text Text k zobrazení (flash string)
  */
-void LCDDisplay::print(const char *text)
+void LCDDisplay::print(const __FlashStringHelper *text)
 {
     if (!isInitialized)
         return;
@@ -121,10 +98,10 @@ void LCDDisplay::print(float number, int decimals)
 }
 
 /**
- * @brief Vypíše text na displej a přejde na nový řádek
+ * @brief Vypíše text na displej a přejde na nový řádek (C-string)
  * @param text Text k zobrazení
  */
-void LCDDisplay::println(const String &text)
+void LCDDisplay::println(const char *text)
 {
     if (!isInitialized)
         return;
@@ -141,10 +118,10 @@ void LCDDisplay::println(const String &text)
 }
 
 /**
- * @brief Vypíše text na displej a přejde na nový řádek
- * @param text Text k zobrazení
+ * @brief Vypíše text na displej a přejde na nový řádek (F macro support)
+ * @param text Text k zobrazení (flash string)
  */
-void LCDDisplay::println(const char *text)
+void LCDDisplay::println(const __FlashStringHelper *text)
 {
     if (!isInitialized)
         return;
@@ -287,12 +264,12 @@ void LCDDisplay::scrollRight()
 }
 
 /**
- * @brief Vypíše text na konkrétní pozici
+ * @brief Vypíše text na konkrétní pozici (C-string)
  * @param col Sloupec (0-15)
  * @param row Řádek (0-1)
  * @param text Text k zobrazení
  */
-void LCDDisplay::printAt(int col, int row, const String &text)
+void LCDDisplay::printAt(int col, int row, const char *text)
 {
     if (!isInitialized)
         return;
@@ -302,12 +279,12 @@ void LCDDisplay::printAt(int col, int row, const String &text)
 }
 
 /**
- * @brief Vypíše text na konkrétní pozici
+ * @brief Vypíše text na konkrétní pozici (F macro support)
  * @param col Sloupec (0-15)
  * @param row Řádek (0-1)
- * @param text Text k zobrazení
+ * @param text Text k zobrazení (flash string)
  */
-void LCDDisplay::printAt(int col, int row, const char *text)
+void LCDDisplay::printAt(int col, int row, const __FlashStringHelper *text)
 {
     if (!isInitialized)
         return;

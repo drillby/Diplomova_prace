@@ -10,6 +10,7 @@ const char apSSID[] = "ArduinoAP";        // SSID Access Pointu
 const char apPass[] = "12345678";         // Heslo Access Pointu
 const int httpPort = 80;                  // HTTP port pro web server
 const int tcpPort = 8888;                 // TCP port pro EMG server
+const int restApiPort = 8080;             // REST API port
 const int serialBaudRate = 9600;          // Baud rate pro Serial komunikaci
 const uint16_t wifiTimeoutMs = 20000;     // Timeout pro WiFi připojení v ms
 const uint16_t apStabilizationMs = 10000; // Čas pro stabilizaci AP v ms
@@ -24,8 +25,8 @@ const int maxStringLength = 31;      // Maximální délka řetězce v EEPROM
 /**
  * @brief Placeholder hodnoty pro reset síťových přihlašovacích údajů
  */
-const char placeholderSSID[] = "PLACEHOLDER_SSID"; // Placeholder SSID
-const char placeholderPass[] = "PLACEHOLDER_PASS"; // Placeholder heslo
+const char placeholderSSID[] = "PLACEHOLDER"; // Placeholder SSID
+const char placeholderPass[] = "PLACEHOLDER"; // Placeholder heslo
 
 /**
  * @brief EMG systém parametry
@@ -48,9 +49,6 @@ void resetNetworkCredentials()
     EEPROMManager::begin();
 
     // Zápis placeholder hodnot pomocí EEPROMManager
-    String ssidStr = String(placeholderSSID);
-    String passStr = String(placeholderPass);
-
-    EEPROMManager::writeString(EEPROM_ADDR_WIFISSID, ssidStr);
-    EEPROMManager::writeString(EEPROM_ADDR_WIFIPASS, passStr);
+    EEPROMManager::writeString(EEPROM_ADDR_WIFISSID, placeholderSSID);
+    EEPROMManager::writeString(EEPROM_ADDR_WIFIPASS, placeholderPass);
 }

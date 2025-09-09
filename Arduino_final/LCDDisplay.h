@@ -7,7 +7,7 @@
 
 /**
  * @class LCDDisplay
- * @brief Třída pro ovládání Grove-16x2 LCD displeje s RGB podsvícením
+ * @brief Třída pro ovládání Grove-16x2 LCD displeje
  */
 class LCDDisplay
 {
@@ -39,24 +39,16 @@ public:
     bool begin(int cols = 16, int rows = 2);
 
     /**
-     * @brief Nastaví RGB barvu podsvícení
-     * @param red Červená složka (0-255)
-     * @param green Zelená složka (0-255)
-     * @param blue Modrá složka (0-255)
-     */
-    void setBacklightColor(int red, int green, int blue);
-
-    /**
-     * @brief Vypíše text na displej
-     * @param text Text k zobrazení
-     */
-    void print(const String &text);
-
-    /**
      * @brief Vypíše text na displej s možností formátování
-     * @param text Text k zobrazení
+     * @param text Text k zobrazení (C-string)
      */
     void print(const char *text);
+
+    /**
+     * @brief Vypíše text na displej s možností formátování (F macro support)
+     * @param text Text k zobrazení (flash string)
+     */
+    void print(const __FlashStringHelper *text);
 
     /**
      * @brief Vypíše číslo na displej
@@ -72,16 +64,16 @@ public:
     void print(float number, int decimals = 2);
 
     /**
-     * @brief Vypíše text na displej a přejde na nový řádek
-     * @param text Text k zobrazení
-     */
-    void println(const String &text);
-
-    /**
-     * @brief Vypíše text na displej a přejde na nový řádek
+     * @brief Vypíše text na displej a přejde na nový řádek (C-string)
      * @param text Text k zobrazení
      */
     void println(const char *text);
+
+    /**
+     * @brief Vypíše text na displej a přejde na nový řádek (F macro support)
+     * @param text Text k zobrazení (flash string)
+     */
+    void println(const __FlashStringHelper *text);
 
     /**
      * @brief Nastaví pozici kurzoru
@@ -141,20 +133,20 @@ public:
     void scrollRight();
 
     /**
-     * @brief Vypíše text na konkrétní pozici
-     * @param col Sloupec (0-15)
-     * @param row Řádek (0-1)
-     * @param text Text k zobrazení
-     */
-    void printAt(int col, int row, const String &text);
-
-    /**
-     * @brief Vypíše text na konkrétní pozici
+     * @brief Vypíše text na konkrétní pozici (C-string)
      * @param col Sloupec (0-15)
      * @param row Řádek (0-1)
      * @param text Text k zobrazení
      */
     void printAt(int col, int row, const char *text);
+
+    /**
+     * @brief Vypíše text na konkrétní pozici (F macro support)
+     * @param col Sloupec (0-15)
+     * @param row Řádek (0-1)
+     * @param text Text k zobrazení (flash string)
+     */
+    void printAt(int col, int row, const __FlashStringHelper *text);
 
     /**
      * @brief Kontroluje, zda je displej inicializovaný

@@ -12,11 +12,11 @@ void EEPROMManager::begin()
 /**
  * @brief Zapíše řetězec do EEPROM na specifikovanou adresu
  * @param startAddr Počáteční adresa v EEPROM
- * @param data Řetězec k zápisu
+ * @param data Řetězec k zápisu (C-string)
  */
-void EEPROMManager::writeString(int startAddr, const String &data)
+void EEPROMManager::writeString(int startAddr, const char *data)
 {
-    int len = data.length();
+    int len = strlen(data);
     len = len > maxStringLength ? maxStringLength : len; // max 31 znaků + 1 bajt na délku
 
     // Čtení aktuální délky
@@ -46,18 +46,20 @@ void EEPROMManager::writeString(int startAddr, const String &data)
 /**
  * @brief Načte řetězec z EEPROM ze specifikované adresy
  * @param startAddr Počáteční adresa v EEPROM
- * @return Načtený řetězec nebo prázdný řetězec při chybě
+ * @param buffer Buffer pro načtený řetězec
+ * @param bufferSize Velikost bufferu
+ * @return Počet načtených znaků nebo -1 při chybě
  */
-String EEPROMManager::readString(int startAddr)
+int EEPROMManager::readString(int startAddr, char *buffer, int bufferSize)
 {
     int len = EEPROM.read(startAddr);
-    if (len < 0 || len > maxStringLength)
-        return "";
-    String result = "";
+    if (len < 0 || len > maxStringLength || len >= bufferSize)
+        return -1;
+
     for (int i = 0; i < len; i++)
     {
-        char c = EEPROM.read(startAddr + 1 + i);
-        result += c;
+        buffer[i] = EEPROM.read(startAddr + 1 + i);
     }
-    return result;
+    buffer[len] = '\0'; // Null terminator
+    return len;
 }

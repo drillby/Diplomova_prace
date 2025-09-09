@@ -76,21 +76,21 @@ void EMGSensor::calibrate(unsigned long durationMs)
     thresholdUpper = mean + 3.0 * stdDev;
     thresholdLower = mean - 3.0 * stdDev;
 
-    printIfPinLow("Kalibrace:", debugPin);
+    printIfPinLow(F("Kalibrace:"), debugPin);
 
-    String msg;
+    char msg[64];
 
-    msg = "Průměr: " + String(mean, 4);
-    printIfPinLow(msg.c_str(), debugPin);
+    snprintf(msg, sizeof(msg), "Průměr: %.4f", mean);
+    printIfPinLow(msg, debugPin);
 
-    msg = "Směrodatná odchylka: " + String(stdDev, 4);
-    printIfPinLow(msg.c_str(), debugPin);
+    snprintf(msg, sizeof(msg), "Směrodatná odchylka: %.4f", stdDev);
+    printIfPinLow(msg, debugPin);
 
-    msg = "Nastaven prah upper: " + String(thresholdUpper, 4);
-    printIfPinLow(msg.c_str(), debugPin);
+    snprintf(msg, sizeof(msg), "Nastaven prah upper: %.4f", thresholdUpper);
+    printIfPinLow(msg, debugPin);
 
-    msg = "Nastaven prah lower: " + String(thresholdLower, 4);
-    printIfPinLow(msg.c_str(), debugPin);
+    snprintf(msg, sizeof(msg), "Nastaven prah lower: %.4f", thresholdLower);
+    printIfPinLow(msg, debugPin);
 }
 
 /**

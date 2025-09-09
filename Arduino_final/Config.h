@@ -10,6 +10,7 @@ extern const char apSSID[];              // SSID Access Pointu
 extern const char apPass[];              // Heslo Access Pointu
 extern const int httpPort;               // HTTP port pro web server
 extern const int tcpPort;                // TCP port pro EMG server
+extern const int restApiPort;            // REST API port
 extern const int serialBaudRate;         // Baud rate pro Serial komunikaci
 extern const uint16_t wifiTimeoutMs;     // Timeout pro WiFi připojení v ms
 extern const uint16_t apStabilizationMs; // Čas pro stabilizaci AP v ms

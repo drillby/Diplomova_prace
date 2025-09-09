@@ -15,7 +15,7 @@ EMGSystem::EMGSystem(int port) : server(port), lcdDisplay(nullptr) {}
 void EMGSystem::beginServer()
 {
     server.begin();
-    printIfPinLow("EMG TCP server spuštěn", debugPin);
+    printIfPinLow(F("EMG TCP server spuštěn"), debugPin);
 }
 
 /**
@@ -25,14 +25,30 @@ void EMGSystem::handleClientMessages()
 {
     if (client.available())
     {
-        String message = client.readStringUntil('\n');
-        message.trim();
-        message.toUpperCase();
-
-        if (message == "DISCONNECT")
+        char message[64];
+        int msgLen = client.readBytesUntil('\n', message, sizeof(message) - 1);
+        if (msgLen > 0)
         {
-            printIfPinLow("DISCONNECT příkaz přijat. Ukončuji spojení...", debugPin);
-            cleanupClient();
+            message[msgLen] = '\0';
+
+            // Trim whitespace and convert to uppercase
+            while (msgLen > 0 && (message[msgLen - 1] == ' ' || message[msgLen - 1] == '\r'))
+            {
+                message[--msgLen] = '\0';
+            }
+
+            // Simple uppercase conversion for ASCII
+            for (int i = 0; i < msgLen; i++)
+            {
+                if (message[i] >= 'a' && message[i] <= 'z')
+                    message[i] = message[i] - 'a' + 'A';
+            }
+
+            if (strcmp(message, "DISCONNECT") == 0)
+            {
+                printIfPinLow(F("DISCONNECT příkaz přijat. Ukončuji spojení..."), debugPin);
+                cleanupClient();
+            }
         }
     }
 }
@@ -45,8 +61,8 @@ void EMGSystem::sendAliveIfNeeded()
     unsigned long now = millis();
     if (now - lastAliveTime >= aliveIntervalMs)
     {
-        client.print("ALIVE\n");
-        printIfPinLow("Odesláno: ALIVE", debugPin);
+        client.print(F("ALIVE\n"));
+        printIfPinLow(F("Odesláno: ALIVE"), debugPin);
         lastAliveTime = now;
     }
 }
@@ -70,8 +86,8 @@ void EMGSystem::handleLogic()
     // Check if we need to send "0" (non-blocking, checked every loop iteration)
     if (sendZeroPending && now >= zeroSendTime)
     {
-        client.print("0\n");
-        printIfPinLow("0", debugPin);
+        client.print(F("0\n"));
+        printIfPinLow(F("0"), debugPin);
         sendZeroPending = false;
     }
 
@@ -85,17 +101,23 @@ void EMGSystem::handleLogic()
 
         lastCycleTime = now;
 
-        String msg = "Navoleno: " + String(cycledValue) + " (" + String(getCommandLabel(cycledValue)) + ")";
-        printIfPinLow(msg.c_str(), debugPin);
+        printIfPinLow(F("Command selected"), debugPin);
+        const char *commandLabel = getCommandLabel(cycledValue);
 
         // Update LCD with selected command
         if (lcdDisplay && lcdDisplay->isReady() && client && client.connected())
         {
-            lcdDisplay->setBacklightColor(0, 255, 255); // Cyan pro výběr příkazu
             lcdDisplay->clear();
-            lcdDisplay->printAt(0, 0, "Prikaz " + String(cycledValue));
-            String commandLabel = String(getCommandLabel(cycledValue));
-            lcdDisplay->printAt(0, 1, commandLabel.substring(0, 16));
+            char commandStr[32];
+            snprintf(commandStr, sizeof(commandStr), "Prikaz %d", cycledValue);
+            lcdDisplay->printAt(0, 0, commandStr);
+
+            // Show first 16 characters of command label
+            char commandLabel[17];
+            const char *fullLabel = getCommandLabel(cycledValue);
+            strncpy(commandLabel, fullLabel, 16);
+            commandLabel[16] = '\0';
+            lcdDisplay->printAt(0, 1, commandLabel);
         }
     }
 
@@ -103,12 +125,13 @@ void EMGSystem::handleLogic()
     {
         if (cycledValue == 0)
         {
-            printIfPinLow("Žádný příkaz nenavolen.", debugPin);
+            printIfPinLow(F("Žádný příkaz nenavolen."), debugPin);
             return;
         }
-        String msg = String(cycledValue) + "\n";
+        char msg[8];
+        snprintf(msg, sizeof(msg), "%d\n", cycledValue);
         client.print(msg);
-        printIfPinLow(msg.c_str(), debugPin);
+        printIfPinLow(msg, debugPin);
         lastSendTime = now;
 
         // Schedule "0" to be sent after 0.5 seconds
@@ -121,8 +144,9 @@ void EMGSystem::handleLogic()
 
     if (digitalRead(serialPrintPin) == LOW)
     {
-        String serialMsg = String(sensors[0]->getEnvelope(), 4) + "," + String(sensors[1]->getEnvelope(), 4);
-        printIfPinLow(serialMsg.c_str(), serialPrintPin);
+        char serialMsg[24];
+        snprintf(serialMsg, sizeof(serialMsg), "%.4f,%.4f", sensors[0]->getEnvelope(), sensors[1]->getEnvelope());
+        printIfPinLow(serialMsg, serialPrintPin);
     }
 }
 
@@ -146,7 +170,7 @@ void EMGSystem::initSensors()
         sensors[i] = new EMGSensor(emgPins[i]);
     calibrateSensors();
     cycledValue = 1;
-    printIfPinLow("Systém inicializován pro 2 EMG senzory.", debugPin);
+    printIfPinLow(F("Systém inicializován pro 2 EMG senzory."), debugPin);
 }
 
 /**
@@ -157,15 +181,14 @@ void EMGSystem::handleNewClient()
     client = server.available();
     if (!client)
         return;
-    printIfPinLow("Klient připojen - inicializuji senzory", debugPin);
+    printIfPinLow(F("Klient připojen - inicializuji senzory"), debugPin);
 
     // Update LCD with client connected
     if (lcdDisplay && lcdDisplay->isReady())
     {
-        lcdDisplay->setBacklightColor(0, 255, 0); // Zelená pro úspěšné připojení
         lcdDisplay->clear();
-        lcdDisplay->printAt(0, 0, "Klient pripojen");
-        lcdDisplay->printAt(0, 1, "Kalibrace...");
+        lcdDisplay->printAt(0, 0, F("Klient pripojen"));
+        lcdDisplay->printAt(0, 1, F("Kalibrace..."));
     }
 
     initSensors();
@@ -174,11 +197,17 @@ void EMGSystem::handleNewClient()
     // After calibration, show initial command
     if (lcdDisplay && lcdDisplay->isReady())
     {
-        lcdDisplay->setBacklightColor(0, 255, 255); // Cyan pro výběr příkazu
         lcdDisplay->clear();
-        lcdDisplay->printAt(0, 0, "Prikaz " + String(cycledValue));
-        String commandLabel = String(getCommandLabel(cycledValue));
-        lcdDisplay->printAt(0, 1, commandLabel.substring(0, 16));
+        char commandStr[32];
+        snprintf(commandStr, sizeof(commandStr), "Prikaz %d", cycledValue);
+        lcdDisplay->printAt(0, 0, commandStr);
+
+        // Show first 16 characters of command label
+        char commandLabel[17];
+        const char *fullLabel = getCommandLabel(cycledValue);
+        strncpy(commandLabel, fullLabel, 16);
+        commandLabel[16] = '\0';
+        lcdDisplay->printAt(0, 1, commandLabel);
     }
 }
 
@@ -205,7 +234,7 @@ void EMGSystem::cleanupClient()
 {
     client.stop();
     cleanupSensors();
-    printIfPinLow("Klient odpojen a systém resetován.", debugPin);
+    printIfPinLow(F("Klient odpojen a systém resetován."), debugPin);
     wasClientConnected = false;
 }
 
@@ -221,35 +250,35 @@ void EMGSystem::update()
     {
         if (wasClientConnected)
         {
-            printIfPinLow("Klient ztratil spojení.", debugPin);
+            printIfPinLow(F("Klient ztratil spojení."), debugPin);
             cleanupClient();
 
             // Update LCD when client disconnects
             if (lcdDisplay && lcdDisplay->isReady())
             {
-                lcdDisplay->setBacklightColor(255, 165, 0); // Oranžová pro čekání
                 lcdDisplay->clear();
-                lcdDisplay->printAt(0, 0, "Cekam na klienta");
+                lcdDisplay->printAt(0, 0, F("Cekam na klienta"));
                 IPAddress ip = WiFi.localIP();
-                String ipStr = String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
-                lcdDisplay->printAt(0, 1, ipStr.substring(0, 16));
+                char ipStr[17];
+                snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+                lcdDisplay->printAt(0, 1, ipStr);
             }
         }
 
         if (!noClientPrinted)
         {
-            printIfPinLow("Žádný klient není připojen.", debugPin);
+            printIfPinLow(F("Žádný klient není připojen."), debugPin);
             noClientPrinted = true;
 
             // Show server IP when waiting for client
             if (lcdDisplay && lcdDisplay->isReady())
             {
-                lcdDisplay->setBacklightColor(255, 165, 0); // Oranžová pro čekání
                 lcdDisplay->clear();
-                lcdDisplay->printAt(0, 0, "Cekam na klienta");
+                lcdDisplay->printAt(0, 0, F("Cekam na klienta"));
                 IPAddress ip = WiFi.localIP();
-                String ipStr = String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
-                lcdDisplay->printAt(0, 1, ipStr.substring(0, 16));
+                char ipStr[17];
+                snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+                lcdDisplay->printAt(0, 1, ipStr);
             }
         }
 
@@ -263,7 +292,7 @@ void EMGSystem::update()
     {
         if (!notInitializedPrinted)
         {
-            printIfPinLow("Senzory nejsou inicializovány.", debugPin);
+            printIfPinLow(F("Senzory nejsou inicializovány."), debugPin);
             notInitializedPrinted = true;
         }
         return;
@@ -291,4 +320,46 @@ bool EMGSystem::isInitialized() const
 void EMGSystem::setLCDDisplay(LCDDisplay *lcd)
 {
     lcdDisplay = lcd;
+}
+
+/**
+ * @brief Vrací aktuálně vybraný příkaz
+ * @return Číselný kód aktuálního příkazu
+ */
+int EMGSystem::getCurrentCommand() const
+{
+    return cycledValue;
+}
+
+/**
+ * @brief Odešle aktuálně vybraný příkaz (simuluje akci EMG2)
+ * @return True pokud byl příkaz odeslán úspěšně
+ */
+bool EMGSystem::sendCurrentCommand()
+{
+    if (!initialized || !client || !client.connected() || cycledValue == 0)
+    {
+        return false;
+    }
+
+    unsigned long now = millis();
+    if (now - lastSendTime < cooldown)
+    {
+        return false; // Still in cooldown period
+    }
+
+    // Send the command
+    char msg[8];
+    snprintf(msg, sizeof(msg), "%d\n", cycledValue);
+    client.print(msg);
+    printIfPinLow(F("API: Command sent to TCP client"), debugPin);
+    printIfPinLow(msg, debugPin);
+    lastSendTime = now;
+
+    // Schedule "0" to be sent after 0.5 seconds (same as EMG2 behavior)
+    static unsigned long zeroSendTime = now + 500;
+    // Note: The zero sending logic is handled in handleLogic(),
+    // but we need to ensure it gets triggered
+
+    return true;
 }

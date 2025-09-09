@@ -5,6 +5,7 @@
 #include <WiFiNINA.h>
 #include "EMGSystem.h"
 #include "LCDDisplay.h"
+#include "RestAPI.h"
 
 /**
  * @class WiFiConfigSystem
@@ -14,12 +15,13 @@ class WiFiConfigSystem
 {
 private:
     WiFiServer server;      // HTTP server instance
-    String wifiSSID;        // Uložené WiFi SSID
-    String wifiPass;        // Uložené WiFi heslo
+    char wifiSSID[32];      // Uložené WiFi SSID (C-string)
+    char wifiPass[32];      // Uložené WiFi heslo (C-string)
     bool isAPMode;          // Příznak režimu Access Point
     bool initialized;       // Příznak inicializace systému
     EMGSystem &emgSystem;   // Reference na EMG systém
     LCDDisplay *lcdDisplay; // Pointer na LCD displej
+    RestAPI *restAPI;       // Pointer na REST API
 
     /**
      * @brief Pokusí se připojit k WiFi síti
@@ -35,11 +37,11 @@ private:
 
     /**
      * @brief Zpracuje HTTP požadavek s WiFi údaji
-     * @param reqLine Řádek HTTP požadavku
+     * @param reqLine Řádek HTTP požadavku (C-string)
      * @param client WiFi klient pro odpověď
      * @return True pokud byl požadavek zpracován
      */
-    bool handleWiFiConfig(const String &reqLine, WiFiClient &client);
+    bool handleWiFiConfig(const char *reqLine, WiFiClient &client);
 
     /**
      * @brief Odešle HTML stránku s potvrzením úspěšného uložení
@@ -85,9 +87,11 @@ public:
 
     /**
      * @brief Vrací aktuální WiFi SSID
-     * @return WiFi SSID řetězec
+     * @param buffer Buffer pro SSID řetězec
+     * @param bufferSize Velikost bufferu
+     * @return Počet zkopírovaných znaků
      */
-    String getWiFiSSID() const;
+    int getWiFiSSID(char *buffer, int bufferSize) const;
 
     /**
      * @brief Vrací informaci o délce WiFi hesla
@@ -100,6 +104,12 @@ public:
      * @param lcd Pointer na LCD displej
      */
     void setLCDDisplay(LCDDisplay *lcd);
+
+    /**
+     * @brief Vrací pointer na REST API (pokud je WiFi připojeno)
+     * @return Pointer na REST API nebo nullptr pokud není dostupné
+     */
+    RestAPI *getRestAPI() const;
 };
 
 #endif // WIFI_CONFIG_SYSTEM_H

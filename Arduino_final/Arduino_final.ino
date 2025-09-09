@@ -31,34 +31,35 @@ void setup()
     // Kontrola reset síťových přihlašovacích údajů
     if (digitalRead(debugPin) == LOW && digitalRead(resetNetworkCreds) == LOW)
     {
-        Serial.println("RESET SÍŤOVÝCH PŘIHLAŠOVACÍCH ÚDAJŮ AKTIVOVÁN!");
-        Serial.println("Ukládání placeholder hodnot do EEPROM...");
+        Serial.println(F("RESET AKTIVOVÁN!"));
+        Serial.println(F("Ukládání..."));
 
         resetNetworkCredentials();
 
-        Serial.println("Síťové přihlašovací údaje byly resetovány na placeholder hodnoty.");
-        Serial.println("SSID: " + String(placeholderSSID));
-        Serial.println("Heslo: " + String(placeholderPass));
-        Serial.println("");
-        Serial.println("!!! RESTARTUJTE ARDUINO !!!");
-        Serial.println("Pro restart stiskněte reset tlačítko nebo odpojte a znovu připojte napájení.");
+        Serial.println(F("Reset dokončen."));
+        Serial.print(F("SSID: "));
+        Serial.println(placeholderSSID);
+        Serial.print(F("Heslo: "));
+        Serial.println(placeholderPass);
+        Serial.println(F(""));
+        Serial.println(F("!!! RESTART !!!"));
+        Serial.println(F("Stiskněte reset tlačítko."));
 
         // Nekonečná smyčka - zastavení Arduino
         while (true)
         {
-            Serial.println("Čekání na restart...");
+            Serial.println(F("Čekání..."));
             delay(2000);
         }
     }
 
-    printIfPinLow("Start systému...", debugPin);
+    printIfPinLow(F("Start systému..."), debugPin);
 
     // Inicializace LCD displeje
     if (display.begin(16, 2))
     {
-        display.setBacklightColor(0, 100, 255); // Modrá barva pro start
-        display.printAt(0, 0, "EMG System");
-        display.printAt(0, 1, "Inicializace...");
+        display.printAt(0, 0, F("EMG System"));
+        display.printAt(0, 1, F("Inicializace..."));
         delay(1000);
     }
 
@@ -66,11 +67,15 @@ void setup()
     emgSystem.setLCDDisplay(&display);
 
     wifiConfig.begin();
-    printIfPinLow("Systém připraven.", debugPin);
+    printIfPinLow(F("Systém připraven."), debugPin);
 
     while (digitalRead(debugPin) == LOW && digitalRead(serialPrintPin) == LOW)
     {
-        Serial.println("Pro správné zasílání dat přes serial je potřeba mít zapojen debug pin (pin " + String(debugPin) + "), nebo serial print pin (pin " + String(serialPrintPin) + "). NE OBOJÍ!");
+        Serial.print(F("Použij jen jeden pin: debug ("));
+        Serial.print(debugPin);
+        Serial.print(F(") nebo serial ("));
+        Serial.print(serialPrintPin);
+        Serial.println(F("). NE OBA!"));
         delay(1000);
     }
 }

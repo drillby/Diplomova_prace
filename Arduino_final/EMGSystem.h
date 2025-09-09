@@ -94,6 +94,18 @@ public:
      * @param lcd Pointer na LCD displej
      */
     void setLCDDisplay(LCDDisplay *lcd);
+
+    /**
+     * @brief Vrací aktuálně vybraný příkaz
+     * @return Číselný kód aktuálního příkazu
+     */
+    int getCurrentCommand() const;
+
+    /**
+     * @brief Odešle aktuálně vybraný příkaz (simuluje akci EMG2)
+     * @return True pokud byl příkaz odeslán úspěšně
+     */
+    bool sendCurrentCommand();
 };
 
 #endif // EMG_SYSTEM_H
