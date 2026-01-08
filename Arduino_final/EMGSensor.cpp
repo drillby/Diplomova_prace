@@ -83,13 +83,13 @@ void EMGSensor::calibrate(unsigned long durationMs)
     snprintf(msg, sizeof(msg), "Průměr: %.4f", mean);
     printIfPinLow(msg, debugPin);
 
-    snprintf(msg, sizeof(msg), "Směrodatná odchylka: %.4f", stdDev);
+    snprintf(msg, sizeof(msg), "Směrodatná odchylka: %.6f", stdDev);
     printIfPinLow(msg, debugPin);
 
-    snprintf(msg, sizeof(msg), "Nastaven prah upper: %.4f", thresholdUpper);
+    snprintf(msg, sizeof(msg), "Nastaven prah upper: %.6f", thresholdUpper);
     printIfPinLow(msg, debugPin);
 
-    snprintf(msg, sizeof(msg), "Nastaven prah lower: %.4f", thresholdLower);
+    snprintf(msg, sizeof(msg), "Nastaven prah lower: %.6f", thresholdLower);
     printIfPinLow(msg, debugPin);
 }
 

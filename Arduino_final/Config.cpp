@@ -10,7 +10,6 @@ const char apSSID[] = "ArduinoAP";        // SSID Access Pointu
 const char apPass[] = "12345678";         // Heslo Access Pointu
 const int httpPort = 80;                  // HTTP port pro web server
 const int tcpPort = 8888;                 // TCP port pro EMG server
-const int restApiPort = 8080;             // REST API port
 const int serialBaudRate = 9600;          // Baud rate pro Serial komunikaci
 const uint16_t wifiTimeoutMs = 20000;     // Timeout pro WiFi připojení v ms
 const uint16_t apStabilizationMs = 10000; // Čas pro stabilizaci AP v ms

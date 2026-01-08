@@ -2,14 +2,13 @@
 #include "Config.h"
 #include "Utils.h"
 #include "EEPROMManager.h"
-#include "RestAPI.h"
 
 /**
  * @brief Konstruktor WiFiConfigSystem
  * @param emgSys Reference na EMG systém
  * @param lcd Pointer na LCD displej (volitelný)
  */
-WiFiConfigSystem::WiFiConfigSystem(EMGSystem &emgSys, LCDDisplay *lcd) : server(httpPort), isAPMode(false), initialized(false), emgSystem(emgSys), lcdDisplay(lcd), restAPI(nullptr)
+WiFiConfigSystem::WiFiConfigSystem(EMGSystem &emgSys, LCDDisplay *lcd) : server(httpPort), isAPMode(false), initialized(false), emgSystem(emgSys), lcdDisplay(lcd)
 {
     // Initialize char arrays
     wifiSSID[0] = '\0';
@@ -340,8 +339,6 @@ void WiFiConfigSystem::sendConfigPage(WiFiClient &client)
         client.print(WiFi.localIP());
         client.println(F("</div><div class='info-item'><span class='info-label'>EMG TCP port:</span> "));
         client.print(tcpPort);
-        client.println(F("</div><div class='info-item'><span class='info-label'>REST API port:</span> "));
-        client.print(restApiPort);
         client.println(F("</div>"));
     }
     client.println(F("</div>"));
@@ -413,11 +410,6 @@ void WiFiConfigSystem::begin()
         isAPMode = false;
         printIfPinLow(F("WiFi připojeno - spouštím EMG systém"), debugPin);
         emgSystem.beginServer();
-
-        // Initialize and start REST API only when WiFi is connected
-        printIfPinLow(F("Spouštím REST API server"), debugPin);
-        restAPI = new RestAPI(restApiPort, &emgSystem);
-        restAPI->begin();
     }
     else
     {
@@ -482,13 +474,6 @@ void WiFiConfigSystem::update()
                 // Krátká pauza před restartem
                 delay(2000);
 
-                // Cleanup REST API if it exists
-                if (restAPI != nullptr)
-                {
-                    delete restAPI;
-                    restAPI = nullptr;
-                }
-
                 // Ukončíme WiFi spojení
                 WiFi.disconnect();
                 delay(500);
@@ -507,13 +492,6 @@ void WiFiConfigSystem::update()
             delay(50);
             client.stop();
             printIfPinLow(F("Restartování Arduino..."), debugPin);
-
-            // Cleanup REST API if it exists
-            if (restAPI != nullptr)
-            {
-                delete restAPI;
-                restAPI = nullptr;
-            }
 
             // Ukončíme WiFi spojení
             WiFi.disconnect();
@@ -537,12 +515,6 @@ void WiFiConfigSystem::update()
     {
         // V WiFi režimu zpracovávej EMG systém a REST API
         emgSystem.update();
-
-        // Update REST API only when WiFi is connected and API is initialized
-        if (restAPI && restAPI->isInitialized())
-        {
-            restAPI->update();
-        }
     }
 }
 
@@ -591,13 +563,4 @@ bool WiFiConfigSystem::hasWiFiPassword() const
 void WiFiConfigSystem::setLCDDisplay(LCDDisplay *lcd)
 {
     lcdDisplay = lcd;
-}
-
-/**
- * @brief Vrací pointer na REST API (pokud je WiFi připojeno)
- * @return Pointer na REST API nebo nullptr pokud není dostupné
- */
-RestAPI *WiFiConfigSystem::getRestAPI() const
-{
-    return restAPI;
 }

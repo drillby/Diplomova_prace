@@ -5,7 +5,6 @@
 #include <WiFiNINA.h>
 #include "EMGSystem.h"
 #include "LCDDisplay.h"
-#include "RestAPI.h"
 
 /**
  * @class WiFiConfigSystem
@@ -21,7 +20,6 @@ private:
     bool initialized;       // Příznak inicializace systému
     EMGSystem &emgSystem;   // Reference na EMG systém
     LCDDisplay *lcdDisplay; // Pointer na LCD displej
-    RestAPI *restAPI;       // Pointer na REST API
 
     /**
      * @brief Pokusí se připojit k WiFi síti
@@ -104,12 +102,6 @@ public:
      * @param lcd Pointer na LCD displej
      */
     void setLCDDisplay(LCDDisplay *lcd);
-
-    /**
-     * @brief Vrací pointer na REST API (pokud je WiFi připojeno)
-     * @return Pointer na REST API nebo nullptr pokud není dostupné
-     */
-    RestAPI *getRestAPI() const;
 };
 
 #endif // WIFI_CONFIG_SYSTEM_H
