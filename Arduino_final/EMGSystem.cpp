@@ -84,24 +84,31 @@ void EMGSystem::handleLogic()
     unsigned long now = millis();
 
     // Check if we need to send "0" (non-blocking, checked every loop iteration)
+    /*
     if (sendZeroPending && now >= zeroSendTime)
     {
         client.print(F("0\n"));
         printIfPinLow(F("0"), debugPin);
         sendZeroPending = false;
     }
+    */
 
     if (emg1Active && !emg1LastActive && (now - lastCycleTime >= cooldown))
     {
         cycledValue++;
-        if (cycledValue > sizeof(commandTable) / sizeof(CommandEntry))
+        if (cycledValue >= sizeof(commandTable) / sizeof(CommandEntry))
         {
-            cycledValue = 1;
+            // cycledValue = 1;
+            cycledValue = 0;
         }
 
         lastCycleTime = now;
 
-        printIfPinLow(F("Command selected"), debugPin);
+        // printIfPinLow(F("Command selected"), debugPin);
+        printIfPinLow(F("Aktuální příkaz:"), debugPin);
+        char msg[32];
+        snprintf(msg, sizeof(msg), "%d - %s", cycledValue, getCommandLabel(cycledValue));
+        printIfPinLow(msg, debugPin);
         const char *commandLabel = getCommandLabel(cycledValue);
 
         // Update LCD with selected command
@@ -123,20 +130,25 @@ void EMGSystem::handleLogic()
 
     if (emg2Active && !emg2LastActive && (now - lastSendTime >= cooldown))
     {
+        /*
         if (cycledValue == 0)
         {
             printIfPinLow(F("Žádný příkaz nenavolen."), debugPin);
             return;
         }
+        */
         char msg[8];
         snprintf(msg, sizeof(msg), "%d\n", cycledValue);
         client.print(msg);
         printIfPinLow(msg, debugPin);
         lastSendTime = now;
+        cycledValue = 0; // po odeslání příkazu chceme mít možnost hned zastavit chod robota
 
         // Schedule "0" to be sent after 0.5 seconds
+        /*
         zeroSendTime = now + sendZeroDelay;
         sendZeroPending = true;
+        */
     }
 
     emg1LastActive = emg1Active;
@@ -302,7 +314,7 @@ void EMGSystem::update()
 
     handleLogic();
     handleClientMessages();
-    sendAliveIfNeeded();
+    // sendAliveIfNeeded();
 }
 
 /**

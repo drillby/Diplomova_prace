@@ -16,7 +16,7 @@ struct CommandEntry
 /**
  * @brief Tabulka dostupných příkazů
  */
-extern const CommandEntry commandTable[8];
+extern const CommandEntry commandTable[9];
 
 /**
  * @brief Vrátí textový název příkazu na základě jeho kódu

@@ -3,7 +3,8 @@
 /**
  * @brief Tabulka dostupných příkazů
  */
-const CommandEntry commandTable[8] = {
+const CommandEntry commandTable[9] = {
+    {0, "DO_NOTHING"},
     {1, "LEFT"},
     {2, "RIGHT"},
     {3, "UP"},
